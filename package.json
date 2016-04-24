@@ -1,0 +1,31 @@
+{
+  "name": "fastply",
+  "version": "0.0.0",
+  "description": "modified plotly for large data browsing",
+  "main": "index.js",
+  "scripts": {
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "(git://github.com/aaronkerlin/fastply.git)"
+  },
+  "keywords": [
+    "npm"
+  ],
+  "author": "Aaron Kerlin (aaron.kerlin@gmail.com)",
+  "license": "MIT",
+  "dependencies": {
+    "bit-twiddle": "^1.0.2",
+    "dat-gui": "^0.5.0",
+    "jpickle": "^0.4.1",
+    "jquery": "^2.2.3",
+    "ndarray": "^1.0.18",
+    "ndarray-fill": "^1.0.1",
+    "ndarray-gradient": "^1.0.0",
+    "ndarray-homography": "^1.0.0",
+    "ndarray-ops": "^1.2.2",
+    "tinycolor": "0.0.1",
+    "typedarray-pool": "^1.1.0"
+  }
+}
