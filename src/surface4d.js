@@ -60,7 +60,7 @@ var createSurface4d = function (pathin, element) {
     graphDiv = document.createElement('div');
     graphId =  uuid.v4();
     graphDiv.id = graphId;
-    graphDiv.style.width = 80 +'%';
+    graphDiv.style.width = 85 +'%';
 
 
     if (!element) {
