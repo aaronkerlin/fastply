@@ -20,6 +20,12 @@ var QUAD = [
   [0, 1]
 ]
 
+var colormaps = [
+        'jet', 'hsv','hot','cool','spring','summer','autumn','winter','bone',
+        'copper','greys','YIGnBu','greens','YIOrRd','bluered','RdBu','picnic',
+        'rainbow','portland','blackbody','earth','electric'
+    ];
+
 var traceIdx,
     intensity,
     count,
@@ -67,7 +73,6 @@ var createSurface4d = function (pathin, element) {
         outputCell = graphDiv.parentNode.parentNode;
         //remove output prompt
         outputCell.removeChild(outputCell.firstElementChild);
-        console.log()
     }
 
     var filePath = pathin;
@@ -97,10 +102,6 @@ var createSurface4d = function (pathin, element) {
             return
         }
 
-        if ('alphamap' in dict.extendedData) {
-            alphamap = dict.extendedData.alphamap;
-        }
-
         //Plot initial data 
         Plotly.newPlot(graphDiv, data=fig.data, layout=fig.layout, {showLink: false});
 
@@ -119,10 +120,7 @@ var createSurface4d = function (pathin, element) {
                 params = {coords: coords, intensity: intensity};
                 tverts[trace.data.index] = getTverts(trace.surface, params);
                 traces[trace.data.index] = trace;
-                if (alphamap) {
-                    trace.surface._colorMap.setPixels(genColormap(alphamap));
-                    trace.surface.opacity = Math.min(trace.surface.opacity,0.99);
-                }
+                trace.surface.opacity = Math.min(trace.surface.opacity,0.99);
             }
         }
         shape = trace.surface.shape.slice();
@@ -135,16 +133,15 @@ var createSurface4d = function (pathin, element) {
             tverts.length=0;
             window.fastply.length=0;
         }
-        // 
-        //console.log(graphDiv)
-        //outputCell.onload = function() {console.log('hi'); };
+
         //take defaults from first surface
         guiVars = {time_course: Math.round(ntps/2),
             time_fine: 0, 
             time: Math.round(ntps/2),
             loThresh: trace.surface.intensityBounds[0],
             hiThresh:  trace.surface.intensityBounds[1],
-            opacity: trace.surface.opacity}
+            opacity: trace.surface.opacity,
+            colormap: 'greys'}
 
         //Setup GUI
         var gui = new dat.GUI({ autoPlace: false })
@@ -153,12 +150,17 @@ var createSurface4d = function (pathin, element) {
         var displayF = gui.addFolder('Display');
         displayF.add(guiVars, 'loThresh').min(-100).max(guiVars.hiThresh).onChange(selectData);
         displayF.add(guiVars, 'hiThresh').min(-100).max(guiVars.hiThresh).onChange(selectData);
-        if (alphamap) {var opacityMax = 0.99} else {var opacityMax = 1}
-        displayF.add(guiVars, 'opacity').min(0).max(opacityMax).onChange(changeOpacity);
-        var dataF = gui.addFolder('Data');
+        displayF.add(guiVars, 'colormap', colormaps).onChange(changeColormap);
+               //.style.color = '#555'
+        displayF.add(guiVars, 'opacity').min(0).max(0.99).onChange(changeOpacity);
+        var dataF = gui.addFolder('Time');
         dataF.add(guiVars, 'time_course').min(0).max(ntps-1).step(1).onChange(selectData);
         var tfrange = Math.min(Math.round(ntps/2),50)
         dataF.add(guiVars, 'time_fine').min(-tfrange).max(tfrange).step(1).onChange(selectData);
+        jquery(gui.domElement.getElementsByTagName('option')).css('color','#000000')
+        jquery(gui.domElement.getElementsByTagName('select')).css('color','#000000')
+
+
         displayF.open();
         dataF.open();
 
@@ -188,10 +190,16 @@ function genColormap (name) {
   return x
 }
 
+function changeColormap() {
+    for (i=0;i<traces.length;i++){
+        traces[i].surface._colorMap.setPixels(genColormap(guiVars.colormap));
+    }                    
+    traces[0].scene.glplot.redraw(); 
+}
+
 function changeOpacity() {
     for (i=0;i<traces.length;i++){
         traces[i].surface.opacity = guiVars.opacity;
-
     }
     traces[0].scene.glplot.redraw(); 
 }
