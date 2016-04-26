@@ -43,6 +43,7 @@ var traceIdx,
     scalars,
     traces,
     ntps,
+    fine_range,
     idxLength,
     tverts,
     tptr,
@@ -104,7 +105,11 @@ var createSurface4d = function (pathin, element) {
             throw "improper extendedData format";
             return
         }
-
+        if ('fine_range' in dict.extendedData) {
+            fine_range = dict.extendedData.fine_range;
+        } else {
+            fine_range = 50;
+        }
         //Plot initial data 
         Plotly.newPlot(graphDiv, data=fig.data, layout=fig.layout, {showLink: false});
 
@@ -158,7 +163,7 @@ var createSurface4d = function (pathin, element) {
         displayF.add(guiVars, 'opacity').min(0).max(0.99).onChange(changeOpacity);
         var dataF = gui.addFolder('Time');
         dataF.add(guiVars, 'time_course').min(0).max(ntps-1).step(1).onChange(selectData);
-        var tfrange = Math.min(Math.round(ntps/2),50)
+        var tfrange = Math.min(Math.round(ntps/2),fine_range)
         dataF.add(guiVars, 'time_fine').min(-tfrange).max(tfrange).step(1).onChange(selectData);
         jquery(gui.domElement.getElementsByTagName('option')).css('color','#000000')
         jquery(gui.domElement.getElementsByTagName('select')).css('color','#000000')

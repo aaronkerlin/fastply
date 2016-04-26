@@ -32,6 +32,7 @@ class fastply(object):
 					minIdx: start time point
 					maxIdx: end time point
 					curIdx: initial time point
+					fine_range: range for fine time control
 
 		"""
 		cPickle.dump({'fig':fig, 'extendedData': extendedData},
