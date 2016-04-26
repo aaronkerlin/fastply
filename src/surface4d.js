@@ -168,6 +168,7 @@ var createSurface4d = function (pathin, element) {
         dataF.open();
 
         //Initial recalc based on default settings
+        changeColormap();
         selectData();
         changeOpacity();
     })
