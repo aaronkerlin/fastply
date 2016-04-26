@@ -9,6 +9,7 @@ var pack = require('ndarray-pack')
 var ops = require('ndarray-ops')
 var colormap = require('colormap')
 var pool = require('typedarray-pool')
+var uuid = require('node-uuid')
 
 
 var QUAD = [
@@ -52,11 +53,13 @@ var traceIdx,
     N_COLORS = 265,
     alphamap,
     delayUpdate,
-    busy;
+    busy,
+    graphID;
 
 var createSurface4d = function (pathin, element) {
     graphDiv = document.createElement('div');
-    graphDiv.id = "plot";
+    graphId =  uuid.v4();
+    graphDiv.id = graphId;
     graphDiv.style.width = 80 +'%';
 
 
