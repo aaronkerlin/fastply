@@ -5,6 +5,10 @@ var getParams = require('../lib/getParams')
 var getTverts = require('../lib/getTverts')
 var jquery = require('jquery')
 var dat = require('dat-gui')
+var pack = require('ndarray-pack')
+var ops = require('ndarray-ops')
+var colormap = require('colormap')
+var pool = require('typedarray-pool')
 
 
 var QUAD = [
@@ -24,6 +28,7 @@ var traceIdx,
     k,
     r,
     c,
+    time,
     graphDiv,
     dataArray,
     outputCell,
@@ -35,13 +40,19 @@ var traceIdx,
     tverts,
     tptr,
     shape,
+    conf,
     guiVars,
-    notebookMode = false;
+    notebookMode = false,
+    N_COLORS = 265,
+    alphamap,
+    delayUpdate,
+    busy;
 
 var createSurface4d = function (pathin, element) {
     graphDiv = document.createElement('div');
     graphDiv.id = "plot";
     graphDiv.style.width = 80 +'%';
+
 
     if (!element) {
         //append to document
@@ -56,7 +67,9 @@ var createSurface4d = function (pathin, element) {
         outputCell = graphDiv.parentNode.parentNode;
         //remove output prompt
         outputCell.removeChild(outputCell.firstElementChild);
+        console.log()
     }
+
     var filePath = pathin;
     jquery.get(filePath,function(fileData){
 
@@ -78,9 +91,14 @@ var createSurface4d = function (pathin, element) {
             binarypath = dict.extendedData.binarypath;
             ntps = dict.extendedData.maxIdx;
             idxLength = ntps.toString().length;
+            getConf();
         } else {
             throw "improper extendedData format";
             return
+        }
+
+        if ('alphamap' in dict.extendedData) {
+            alphamap = dict.extendedData.alphamap;
         }
 
         //Plot initial data 
@@ -101,13 +119,29 @@ var createSurface4d = function (pathin, element) {
                 params = {coords: coords, intensity: intensity};
                 tverts[trace.data.index] = getTverts(trace.surface, params);
                 traces[trace.data.index] = trace;
+                if (alphamap) {
+                    trace.surface._colorMap.setPixels(genColormap(alphamap));
+                    trace.surface.opacity = Math.min(trace.surface.opacity,0.99);
                 }
+            }
         }
         shape = trace.surface.shape.slice();
         tptr = (shape[0] - 1) * (shape[1] - 1) * 6 * 10;
-        
+        //var glplot = trace.scene.glplot;
+        graphDiv.onremove = function () {
+            trace.scene.destroy(); 
+            gui.length=0;
+            pool.freeFloat(tverts); 
+            tverts.length=0;
+            window.fastply.length=0;
+        }
+        // 
+        //console.log(graphDiv)
+        //outputCell.onload = function() {console.log('hi'); };
         //take defaults from first surface
-        guiVars = {time: Math.round(ntps/2), 
+        guiVars = {time_course: Math.round(ntps/2),
+            time_fine: 0, 
+            time: Math.round(ntps/2),
             loThresh: trace.surface.intensityBounds[0],
             hiThresh:  trace.surface.intensityBounds[1],
             opacity: trace.surface.opacity}
@@ -117,11 +151,14 @@ var createSurface4d = function (pathin, element) {
         outputCell.insertBefore(gui.domElement, outputCell.firstChild);
         
         var displayF = gui.addFolder('Display');
-        displayF.add(guiVars, 'loThresh').min(0).max(guiVars.hiThresh).onChange(selectData);
-        displayF.add(guiVars, 'hiThresh').min(0).max(guiVars.hiThresh).onChange(selectData);
-        displayF.add(guiVars, 'opacity').min(0).max(1).onChange(changeOpacity);
+        displayF.add(guiVars, 'loThresh').min(-100).max(guiVars.hiThresh).onChange(selectData);
+        displayF.add(guiVars, 'hiThresh').min(-100).max(guiVars.hiThresh).onChange(selectData);
+        if (alphamap) {var opacityMax = 0.99} else {var opacityMax = 1}
+        displayF.add(guiVars, 'opacity').min(0).max(opacityMax).onChange(changeOpacity);
         var dataF = gui.addFolder('Data');
-        dataF.add(guiVars, 'time').min(0).max(ntps-1).step(1).onChange(selectData);
+        dataF.add(guiVars, 'time_course').min(0).max(ntps-1).step(1).onChange(selectData);
+        var tfrange = Math.min(Math.round(ntps/2),50)
+        dataF.add(guiVars, 'time_fine').min(-tfrange).max(tfrange).step(1).onChange(selectData);
         displayF.open();
         dataF.open();
 
@@ -131,12 +168,43 @@ var createSurface4d = function (pathin, element) {
     })
 }
 
+
+
+function genColormap (name) {
+  var x = pack([colormap({
+    colormap: name,
+    nshades: N_COLORS,
+    format: 'rgba',
+    alpha: [0,1]
+  }).map(function (c) {
+    if (c[3]>0.001) {
+        c[3] = 1;
+    } else {
+        c[3]=0;
+    }
+    return [c[0], c[1], c[2], 255 * c[3]]
+  })])
+  ops.divseq(x, 255.0)
+  return x
+}
+
 function changeOpacity() {
     for (i=0;i<traces.length;i++){
         traces[i].surface.opacity = guiVars.opacity;
 
     }
-    traces[0].scene.glplot.redraw();    
+    traces[0].scene.glplot.redraw(); 
+}
+
+function getConf() {
+    var fname = binarypath + '/conf.json';
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', fname, true);
+    xhr.responseType = 'json';
+    xhr.onload = function(e) {
+        conf = this.response;
+        }
+    xhr.send();
 }
 
 function getBinary() {
@@ -150,7 +218,12 @@ function getBinary() {
     xhr.open('GET', fname, true);
     xhr.responseType = 'arraybuffer';
     xhr.onload = function(e) {
-        var scalars = new Float32Array(this.response); 
+        if (conf.dtype=='int16') {
+            var scalars = new Int16Array(this.response);
+            scalars = new Float32Array(scalars);
+        } else {
+            var scalars = new Float32Array(this.response); 
+        }
         var count = 0;
         for (i=0; i<traces[0].data.surfacecolor.length; i++) {
             for (j=0; j<traces[0].data.surfacecolor[0].length; j++) {
@@ -189,9 +262,22 @@ function updateIntensity() {
         traces[m].surface._coordinateBuffer.update(tverts[m].subarray(0, tptr));
     }
     traces[0].scene.glplot.redraw();
+    busy = false;
+    if (delayUpdate==true) {
+        delayUpdate=false;
+        selectData;
+    }   
 }
 
 function selectData() {
+    if (busy==true) {
+        delayUpdate=true;
+        return
+    } 
+    busy = true;
+    guiVars.time = guiVars.time_course + guiVars.time_fine;
+    guiVars.time = Math.max(guiVars.time,0)
+    guiVars.time = Math.min(guiVars.time, ntps-1)
     if (dataArray) {
         getArray();
     } else if (binarypath) {

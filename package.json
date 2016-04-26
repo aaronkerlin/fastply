@@ -17,6 +17,7 @@
   "license": "MIT",
   "dependencies": {
     "bit-twiddle": "^1.0.2",
+    "colormap": "^2.1.2",
     "dat-gui": "^0.5.0",
     "jpickle": "^0.4.1",
     "jquery": "^2.2.3",
@@ -25,6 +26,7 @@
     "ndarray-gradient": "^1.0.0",
     "ndarray-homography": "^1.0.0",
     "ndarray-ops": "^1.2.2",
+    "ndarray-pack": "^1.2.0",
     "tinycolor": "0.0.1",
     "typedarray-pool": "^1.1.0"
   }
