@@ -32,9 +32,6 @@ class fastply(object):
 					minIdx: start time point
 					maxIdx: end time point
 					curIdx: initial time point
-					alphamap: colormap (must be a default map name from https://www.npmjs.com/package/colormap). 
-						Setting will map intensity to alpha and override plotly colormap.
-
 
 		"""
 		cPickle.dump({'fig':fig, 'extendedData': extendedData},
