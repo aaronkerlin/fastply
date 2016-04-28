@@ -16,7 +16,7 @@ class fastply(object):
 		self.lib = lib;
 
 
-	def save(self, filename, fig, extendedData):
+	def save(self, filename, figs, extendedData):
 		"""	Save formatted plot data to disk
 		:param: filename: path to save pickle file	
 		:param: fig: plotly-formatted dict defining initial plot
@@ -24,7 +24,7 @@ class fastply(object):
 
 		plot type specifications:
 			surface4d:
-				fig: must be surfaces only
+				fig: must contain at least one surface
 				extendedData: dictionary of: 
 					list: 4D surface data as nested lists [time][surface][x][y] (cannot exceed 5MB total),
 						if set then binarypath ignored 
@@ -35,7 +35,7 @@ class fastply(object):
 					fine_range: range for fine time control
 
 		"""
-		cPickle.dump({'fig':fig, 'extendedData': extendedData},
+		cPickle.dump({'figs':figs, 'extendedData': extendedData},
              open(filename, "wb" ))
 
 

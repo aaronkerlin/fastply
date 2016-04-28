@@ -10,7 +10,10 @@ var ops = require('ndarray-ops')
 var colormap = require('colormap')
 var pool = require('typedarray-pool')
 var uuid = require('node-uuid')
-
+var WatchJS = require("watchjs")
+var watch = WatchJS.watch;
+var unwatch = WatchJS.unwatch;
+var callWatchers = WatchJS.callWatchers;
 
 var QUAD = [
   [0, 0],
@@ -47,8 +50,11 @@ var traceIdx,
     idxLength,
     tverts,
     tptr,
+    gui,
     shape,
     conf,
+    dataF,
+    tController,
     guiVars,
     notebookMode = false,
     N_COLORS = 265,
@@ -62,7 +68,10 @@ var createSurface4d = function (pathin, element) {
     graphId =  uuid.v4();
     graphDiv.id = graphId;
     graphDiv.style.width = 85 +'%';
-
+    graphDiv2 = document.createElement('div');
+    graphId2 =  uuid.v4();
+    graphDiv2.id = graphId2;
+    graphDiv2.style.width = 85 +'%';
 
     if (!element) {
         //append to document
@@ -73,6 +82,7 @@ var createSurface4d = function (pathin, element) {
         notebookMode = true
         //append to output cell
         element.append(graphDiv);
+        element.append(graphDiv2);
         //Get output DOM
         outputCell = graphDiv.parentNode.parentNode;
         //remove output prompt
@@ -85,13 +95,14 @@ var createSurface4d = function (pathin, element) {
         //load the data
         var dict = jpickle.loads(fileData);
         try { 
-            var test = (('fig' in dict) && ('extendedData' in dict));
+            var test = (('figs' in dict) && ('extendedData' in dict));
         } catch (err) {
             throw "improper dictionary format";
             return
         }
 
-        var fig  = dict.fig;
+        var fig0  = dict.figs[0];
+        var fig1 = dict.figs[1];
 
         if ('list' in dict.extendedData) {
             dataArray = dict.extendedData.list;
@@ -111,17 +122,18 @@ var createSurface4d = function (pathin, element) {
             fine_range = 50;
         }
         //Plot initial data 
-        Plotly.newPlot(graphDiv, data=fig.data, layout=fig.layout, {showLink: false});
-
+        Plotly.newPlot(graphDiv, data=fig0.data, layout=fig0.layout, {showLink: false});
+        Plotly.newPlot(graphDiv2, data=fig1.data, layout=fig1.layout, {showLink: false});
+        //console.log(graphDiv2._fullLayout)
         //Collect trace objects and tvert data
-        traces = new Array(fig.data.length);
-        var coords = new Array(fig.data.length);
-        tverts = new Array(fig.data.length);
+        traces = new Array(fig0.data.length);
+        var coords = new Array(fig0.data.length);
+        tverts = new Array(fig0.data.length);
         var params;
         var trace;
         for (var traceName in graphDiv._fullLayout.scene._scene.traces){
             trace = graphDiv._fullLayout.scene._scene.traces[traceName];
-            if ('data' in trace) { 
+            if ('surface' in trace) { 
                 params = getParams(trace);
                 coords[trace.data.index] = params.coords;
                 intensity = getIntensity(trace);
@@ -131,6 +143,7 @@ var createSurface4d = function (pathin, element) {
                 trace.surface.opacity = Math.min(trace.surface.opacity,0.99);
             }
         }
+        //traces[0].scene.fullLayout.title='Hi'
         shape = trace.surface.shape.slice();
         tptr = (shape[0] - 1) * (shape[1] - 1) * 6 * 10;
         //var glplot = trace.scene.glplot;
@@ -143,32 +156,36 @@ var createSurface4d = function (pathin, element) {
         }
 
         //take defaults from first surface
-        guiVars = {time_course: Math.round(ntps/2),
-            time_fine: 0, 
-            time: Math.round(ntps/2),
+        guiVars = {time: Math.round(ntps/2),
             loThresh: trace.surface.intensityBounds[0],
             hiThresh:  trace.surface.intensityBounds[1],
             opacity: trace.surface.opacity,
             colormap: 'greys'}
 
         //Setup GUI
-        var gui = new dat.GUI({ autoPlace: false })
+        gui = new dat.GUI({ autoPlace: false })
         outputCell.insertBefore(gui.domElement, outputCell.firstChild);
         
-        var displayF = gui.addFolder('Display');
+        var displayF = gui.addFolder('3D Display');
         displayF.add(guiVars, 'loThresh').min(-100).max(guiVars.hiThresh).onChange(selectData);
         displayF.add(guiVars, 'hiThresh').min(-100).max(guiVars.hiThresh).onChange(selectData);
         displayF.add(guiVars, 'colormap', colormaps).onChange(changeColormap);
                //.style.color = '#555'
         displayF.add(guiVars, 'opacity').min(0).max(0.99).onChange(changeOpacity);
-        var dataF = gui.addFolder('Time');
-        dataF.add(guiVars, 'time_course').min(0).max(ntps-1).step(1).onChange(selectData);
-        var tfrange = Math.min(Math.round(ntps/2),fine_range)
-        dataF.add(guiVars, 'time_fine').min(-tfrange).max(tfrange).step(1).onChange(selectData);
+        dataF = gui.addFolder('Data');
+        guiVars.time=Math.max(guiVars.time,graphDiv2._fullLayout.xaxis._tmin)
+        guiVars.time=Math.min(guiVars.time,graphDiv2._fullLayout.xaxis._tmax)
+        tController = dataF.add(guiVars, 'time').min(graphDiv2._fullLayout.xaxis._tmin).max(
+            graphDiv2._fullLayout.xaxis._tmax).step(1).listen().onChange(selectData)
+        //dataF.add(guiVars, 'time_fine').min(-tfrange).max(tfrange).step(1).onChange(selectData);
         jquery(gui.domElement.getElementsByTagName('option')).css('color','#000000')
         jquery(gui.domElement.getElementsByTagName('select')).css('color','#000000')
-
-
+        //var volF = gui.addFolder('2D Display');
+        //drop-down menu for each data type, updates on/off, color, etc options below
+        //field and mask selector present but disabled depending on data type
+        
+        
+        
         displayF.open();
         dataF.open();
 
@@ -176,10 +193,16 @@ var createSurface4d = function (pathin, element) {
         changeColormap();
         selectData();
         changeOpacity();
+        //console.log(graphDiv2._fullLayout._plots.xy.xaxislayer[0])//.onchange(function () {console.log('hi')})
+        //var watchObj = {min: graphDiv2._fullLayout.xaxis._tmin, 
+        //    max: graphDiv2._fullLayout.xaxis._tmax}
+        //watch(graphDiv2._fullLayout._plots.xaxislayer, ['_tmin','_tmax'], function(){
+        //    console.log('changed')
+        //})
+        //console.log(graphDiv2._fullLayout.xaxislayer)
+        //jquery(graphDiv2).find('rect').prop('onchange', function() {console.log('hi')})
     })
 }
-
-
 
 function genColormap (name) {
   var x = pack([colormap({
@@ -198,6 +221,17 @@ function genColormap (name) {
   ops.divseq(x, 255.0)
   return x
 }
+
+
+function changeTimeRange(){
+    dataF.__ul.removeChild(dataF.__ul.lastChild)
+    tController = dataF.add(guiVars, 'time_course').min(
+        graphDiv2._fullLayout.xaxis._tmin).max(
+        graphDiv2._fullLayout.xaxis._tmax).step(1).onChange(selectData);
+    //tController.updateDisplay()
+    console.log(gui)
+}
+
 
 function changeColormap() {
     for (i=0;i<traces.length;i++){
@@ -287,14 +321,14 @@ function updateIntensity() {
 }
 
 function selectData() {
+    console.log(graphDiv2._fullLayout)
     if (busy==true) {
         delayUpdate=true;
         return
     } 
     busy = true;
-    guiVars.time = guiVars.time_course + guiVars.time_fine;
-    guiVars.time = Math.max(guiVars.time,0)
-    guiVars.time = Math.min(guiVars.time, ntps-1)
+    //guiVars.time = Math.max(guiVars.time,0)
+   // guiVars.time = Math.min(guiVars.time, ntps-1)
     if (dataArray) {
         getArray();
     } else if (binarypath) {
