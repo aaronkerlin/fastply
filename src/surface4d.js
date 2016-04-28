@@ -47,13 +47,15 @@ var traceIdx,
     traces,
     ntps,
     fine_range,
+    rangeslider,
     idxLength,
     tverts,
     tptr,
     gui,
     shape,
     conf,
-    dataF,
+    timeF,
+    initialized=false,
     tController,
     guiVars,
     notebookMode = false,
@@ -170,39 +172,34 @@ var createSurface4d = function (pathin, element) {
         displayF.add(guiVars, 'loThresh').min(-100).max(guiVars.hiThresh).onChange(selectData);
         displayF.add(guiVars, 'hiThresh').min(-100).max(guiVars.hiThresh).onChange(selectData);
         displayF.add(guiVars, 'colormap', colormaps).onChange(changeColormap);
-               //.style.color = '#555'
         displayF.add(guiVars, 'opacity').min(0).max(0.99).onChange(changeOpacity);
-        dataF = gui.addFolder('Data');
-        guiVars.time=Math.max(guiVars.time,graphDiv2._fullLayout.xaxis._tmin)
-        guiVars.time=Math.min(guiVars.time,graphDiv2._fullLayout.xaxis._tmax)
-        tController = dataF.add(guiVars, 'time').min(graphDiv2._fullLayout.xaxis._tmin).max(
-            graphDiv2._fullLayout.xaxis._tmax).step(1).listen().onChange(selectData)
-        //dataF.add(guiVars, 'time_fine').min(-tfrange).max(tfrange).step(1).onChange(selectData);
+        timeF = gui.addFolder('Time');
+        timeRange()
         jquery(gui.domElement.getElementsByTagName('option')).css('color','#000000')
         jquery(gui.domElement.getElementsByTagName('select')).css('color','#000000')
         //var volF = gui.addFolder('2D Display');
         //drop-down menu for each data type, updates on/off, color, etc options below
         //field and mask selector present but disabled depending on data type
         
-        
-        
+        rangeslider = graphDiv2._fullLayout;
         displayF.open();
-        dataF.open();
+        timeF.open();
 
         //Initial recalc based on default settings
         changeColormap();
         selectData();
         changeOpacity();
-        //console.log(graphDiv2._fullLayout._plots.xy.xaxislayer[0])//.onchange(function () {console.log('hi')})
-        //var watchObj = {min: graphDiv2._fullLayout.xaxis._tmin, 
-        //    max: graphDiv2._fullLayout.xaxis._tmax}
-        //watch(graphDiv2._fullLayout._plots.xaxislayer, ['_tmin','_tmax'], function(){
-        //    console.log('changed')
-        //})
-        //console.log(graphDiv2._fullLayout.xaxislayer)
-        //jquery(graphDiv2).find('rect').prop('onchange', function() {console.log('hi')})
+
+        watch(graphDiv2, ['_replotting'], function(){
+            if (graphDiv2._replotting==false) {
+                timeRange()
+            }
+        })
+        
+        initialized=true
     })
 }
+
 
 function genColormap (name) {
   var x = pack([colormap({
@@ -222,14 +219,15 @@ function genColormap (name) {
   return x
 }
 
-
-function changeTimeRange(){
-    dataF.__ul.removeChild(dataF.__ul.lastChild)
-    tController = dataF.add(guiVars, 'time_course').min(
-        graphDiv2._fullLayout.xaxis._tmin).max(
-        graphDiv2._fullLayout.xaxis._tmax).step(1).onChange(selectData);
-    //tController.updateDisplay()
-    console.log(gui)
+function timeRange(){
+    var tmin = graphDiv2._fullLayout.xaxis._tmin
+    var tmax = graphDiv2._fullLayout.xaxis._tmax
+    guiVars.time=Math.max(guiVars.time, tmin)
+    guiVars.time=Math.min(guiVars.time, tmax)
+    if (initialized==true) {
+        timeF.__ul.removeChild(timeF.__ul.lastChild)
+    }  
+    tController = timeF.add(guiVars, 'time').min(tmin).max(tmax).step(1).onChange(selectData);
 }
 
 
@@ -321,14 +319,11 @@ function updateIntensity() {
 }
 
 function selectData() {
-    console.log(graphDiv2._fullLayout)
     if (busy==true) {
         delayUpdate=true;
         return
     } 
     busy = true;
-    //guiVars.time = Math.max(guiVars.time,0)
-   // guiVars.time = Math.min(guiVars.time, ntps-1)
     if (dataArray) {
         getArray();
     } else if (binarypath) {
