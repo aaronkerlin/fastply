@@ -38,6 +38,7 @@ var traceIdx,
     k,
     r,
     c,
+    axisLims = new Float32Array(2),
     time,
     graphDiv,
     dataArray,
@@ -54,8 +55,6 @@ var traceIdx,
     gui,
     shape,
     conf,
-    timeF,
-    initialized=false,
     tController,
     guiVars,
     notebookMode = false,
@@ -173,8 +172,7 @@ var createSurface4d = function (pathin, element) {
         displayF.add(guiVars, 'hiThresh').min(-100).max(guiVars.hiThresh).onChange(selectData);
         displayF.add(guiVars, 'colormap', colormaps).onChange(changeColormap);
         displayF.add(guiVars, 'opacity').min(0).max(0.99).onChange(changeOpacity);
-        timeF = gui.addFolder('Time');
-        timeRange()
+        //timeF = gui.addFolder('Time');
         jquery(gui.domElement.getElementsByTagName('option')).css('color','#000000')
         jquery(gui.domElement.getElementsByTagName('select')).css('color','#000000')
         //var volF = gui.addFolder('2D Display');
@@ -183,7 +181,9 @@ var createSurface4d = function (pathin, element) {
         
         rangeslider = graphDiv2._fullLayout;
         displayF.open();
-        timeF.open();
+
+        axisLims[0] = graphDiv2._fullLayout.xaxis._tmin
+        axisLims[1] = graphDiv2._fullLayout.xaxis._tmax
 
         //Initial recalc based on default settings
         changeColormap();
@@ -192,11 +192,30 @@ var createSurface4d = function (pathin, element) {
 
         watch(graphDiv2, ['_replotting'], function(){
             if (graphDiv2._replotting==false) {
-                timeRange()
+                timeShift(graphDiv2._fullLayout.xaxis._tmin, graphDiv2._fullLayout.xaxis._tmax)
             }
         })
-        
-        initialized=true
+
+        watch(graphDiv2, ['_dragging'], function(){
+            if (graphDiv2._dragging==true) {
+                var startTmin = graphDiv2._fullLayout.xaxis._tmin
+                var startTmax = graphDiv2._fullLayout.xaxis._tmax
+                var xtimeLength = startTmax - startTmin
+                var xpixelLength = graphDiv2._fullLayout._plots.xy.plot[0][0].viewBox.animVal.width
+                var pixelToTime = xtimeLength/xpixelLength
+                var panshift
+                var id = setInterval(xShift,33)
+                function xShift() {
+                    if (graphDiv2._dragging==false) {
+                        clearInterval(id)
+                    } else {
+                        panshift = graphDiv2._fullLayout._plots.xy.plot[0][0].viewBox.animVal.x * pixelToTime
+                        timeShift(startTmin+panshift, startTmax+panshift) 
+                    }
+                }
+            }
+        })
+
     })
 }
 
@@ -219,15 +238,11 @@ function genColormap (name) {
   return x
 }
 
-function timeRange(){
-    var tmin = graphDiv2._fullLayout.xaxis._tmin
-    var tmax = graphDiv2._fullLayout.xaxis._tmax
-    guiVars.time=Math.max(guiVars.time, tmin)
-    guiVars.time=Math.min(guiVars.time, tmax)
-    if (initialized==true) {
-        timeF.__ul.removeChild(timeF.__ul.lastChild)
-    }  
-    tController = timeF.add(guiVars, 'time').min(tmin).max(tmax).step(1).onChange(selectData);
+function timeShift(tmin,tmax){
+    guiVars.time = Math.round((tmax + tmin)/2)
+    guiVars.time=Math.max(guiVars.time, axisLims[0])
+    guiVars.time=Math.min(guiVars.time, axisLims[1])
+    selectData()
 }
 
 
