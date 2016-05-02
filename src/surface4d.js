@@ -8,6 +8,7 @@ var dat = require('dat-gui')
 var pack = require('ndarray-pack')
 var ops = require('ndarray-ops')
 var colormap = require('colormap')
+var tinycolor = require('tinycolor2');
 var pool = require('typedarray-pool')
 var uuid = require('node-uuid')
 var WatchJS = require("watchjs")
@@ -24,11 +25,13 @@ var QUAD = [
   [0, 1]
 ]
 
-var colormaps = [
-        'jet', 'hsv','hot','cool','spring','summer','autumn','winter','bone',
-        'copper','greys','YIGnBu','greens','YIOrRd','bluered','RdBu','picnic',
-        'rainbow','portland','blackbody','earth','electric'
-    ];
+
+
+//var colormaps = [
+//        'jet', 'hsv','hot','cool','spring','summer','autumn','winter','bone',
+//        'copper','greys','YIGnBu','greens','YIOrRd','bluered','RdBu','picnic',
+//       'rainbow','portland','blackbody','earth','electric'
+//    ];
 
 var traceIdx,
     intensity,
@@ -160,8 +163,7 @@ var createSurface4d = function (pathin, element) {
         guiVars = {time: Math.round(ntps/2),
             loThresh: trace.surface.intensityBounds[0],
             hiThresh:  trace.surface.intensityBounds[1],
-            opacity: trace.surface.opacity,
-            colormap: 'greys'}
+            opacity: trace.surface.opacity}
 
         //Setup GUI
         gui = new dat.GUI({ autoPlace: false })
@@ -170,7 +172,7 @@ var createSurface4d = function (pathin, element) {
         var displayF = gui.addFolder('3D Display');
         displayF.add(guiVars, 'loThresh').min(-100).max(guiVars.hiThresh).onChange(selectData);
         displayF.add(guiVars, 'hiThresh').min(-100).max(guiVars.hiThresh).onChange(selectData);
-        displayF.add(guiVars, 'colormap', colormaps).onChange(changeColormap);
+        //displayF.add(guiVars, 'colormap', colormaps).onChange(changeColormap);
         displayF.add(guiVars, 'opacity').min(0).max(0.99).onChange(changeOpacity);
         
         //dataF = gui.addFolder('Data');
@@ -184,18 +186,19 @@ var createSurface4d = function (pathin, element) {
         //drop-down menu for each data type, updates on/off, color, etc options below
         //field and mask selector present but disabled depending on data type
         
-        rangeslider = graphDiv2._fullLayout;
         displayF.open();
 
         axisLims[0] = graphDiv2._fullLayout.xaxis._tmin
         axisLims[1] = graphDiv2._fullLayout.xaxis._tmax
+
+        console.log(graphDiv._fullLayout)
 
         //Initial recalc based on default settings
         changeColormap();
         selectData();
         changeOpacity();
 
-        console.log(graphDiv._fullLayout)
+        
 
         watch(graphDiv2, ['_replotting'], function(){
             if (graphDiv2._replotting==false) {
@@ -228,6 +231,21 @@ var createSurface4d = function (pathin, element) {
 }
 
 
+function parseColorScale(colorscale, alpha) {
+    if(alpha === undefined) alpha = 1;
+
+    return colorscale.map(function(elem) {
+        var index = elem[0];
+        var color = tinycolor(elem[1]);
+        var rgb = color.toRgb();
+        return {
+            index: index,
+            rgb: [rgb.r, rgb.g, rgb.b, alpha]
+        };
+    });
+}
+
+
 function genColormap (name) {
   var x = pack([colormap({
     colormap: name,
@@ -235,7 +253,7 @@ function genColormap (name) {
     format: 'rgba',
     alpha: [0,1]
   }).map(function (c) {
-    if (c[3]>0.001) {
+    if ((c[0]+c[1]+c[2])>0.001) {
         c[3] = 1;
     } else {
         c[3]=0;
@@ -246,19 +264,19 @@ function genColormap (name) {
   return x
 }
 
+function changeColormap() {
+    for (i=0;i<traces.length;i++){
+        var cs = traces[i].data.colorscale
+        traces[i].surface._colorMap.setPixels(genColormap(parseColorScale(cs)));
+    }                    
+    traces[0].scene.glplot.redraw(); 
+}
+
 function timeShift(tmin,tmax){
     guiVars.time = Math.round((tmax + tmin)/2)
     guiVars.time=Math.max(guiVars.time, axisLims[0])
     guiVars.time=Math.min(guiVars.time, axisLims[1])
     selectData()
-}
-
-
-function changeColormap() {
-    for (i=0;i<traces.length;i++){
-        traces[i].surface._colorMap.setPixels(genColormap(guiVars.colormap));
-    }                    
-    traces[0].scene.glplot.redraw(); 
 }
 
 function changeOpacity() {
