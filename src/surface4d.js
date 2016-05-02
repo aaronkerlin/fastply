@@ -54,6 +54,7 @@ var traceIdx,
     fine_range,
     rangeslider,
     idxLength,
+    fixedSurfaces = new Array,
     tverts,
     tptr,
     gui,
@@ -120,6 +121,10 @@ var createSurface4d = function (pathin, element) {
             throw "improper extendedData format";
             return
         }
+
+        if ('fixedSurfaces' in dict.extendedData) {
+                fixedSurfaces = dict.extendedData.fixedSurfaces
+        } 
 
         
         //Plot initial data 
@@ -239,14 +244,10 @@ function genColormap (name) {
     format: 'rgba',
     alpha: [0,1]
   }).map(function (c) {
-    if ((c[0]+c[1]+c[2])>0.001) {
-        c[3] = 1;
-    } else {
-        c[3]=0;
-    }
     return [c[0], c[1], c[2], 255 * c[3]]
   })])
   ops.divseq(x, 255.0)
+  x.set(0,0,3,0)
   return x
 }
 
@@ -307,8 +308,10 @@ function getBinary() {
         for (i=0; i<traces[0].data.surfacecolor.length; i++) {
             for (j=0; j<traces[0].data.surfacecolor[0].length; j++) {
                 for (k=0; k<traces.length; k++) {
-                    traces[k].data.surfacecolor[i][j] = scalars[count];
-                    count++;
+                    if (jquery.inArray(k,fixedSurfaces)==-1) {
+                            traces[k].data.surfacecolor[i][j] = scalars[count];
+                            count++;
+                        }
                 }
             }
         }
