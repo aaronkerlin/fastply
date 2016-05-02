@@ -172,7 +172,12 @@ var createSurface4d = function (pathin, element) {
         displayF.add(guiVars, 'hiThresh').min(-100).max(guiVars.hiThresh).onChange(selectData);
         displayF.add(guiVars, 'colormap', colormaps).onChange(changeColormap);
         displayF.add(guiVars, 'opacity').min(0).max(0.99).onChange(changeOpacity);
-        //timeF = gui.addFolder('Time');
+        
+        //dataF = gui.addFolder('Data');
+        //dataF.
+
+
+
         jquery(gui.domElement.getElementsByTagName('option')).css('color','#000000')
         jquery(gui.domElement.getElementsByTagName('select')).css('color','#000000')
         //var volF = gui.addFolder('2D Display');
@@ -189,6 +194,8 @@ var createSurface4d = function (pathin, element) {
         changeColormap();
         selectData();
         changeOpacity();
+
+        console.log(graphDiv._fullLayout)
 
         watch(graphDiv2, ['_replotting'], function(){
             if (graphDiv2._replotting==false) {
@@ -209,6 +216,7 @@ var createSurface4d = function (pathin, element) {
                     if (graphDiv2._dragging==false) {
                         clearInterval(id)
                     } else {
+                        console.log(pixelToTime)
                         panshift = graphDiv2._fullLayout._plots.xy.plot[0][0].viewBox.animVal.x * pixelToTime
                         timeShift(startTmin+panshift, startTmax+panshift) 
                     }
