@@ -50,6 +50,7 @@ var traceIdx,
     scalars,
     traces,
     ntps,
+    lastTime,
     fine_range,
     rangeslider,
     idxLength,
@@ -107,27 +108,25 @@ var createSurface4d = function (pathin, element) {
 
         var fig0  = dict.figs[0];
         var fig1 = dict.figs[1];
-
+        
+        ntps = fig1.data[0].x.length
         if ('list' in dict.extendedData) {
             dataArray = dict.extendedData.list;
-            ntps = dataArray.length;
         } else if ('binarypath' in dict.extendedData) {
             binarypath = dict.extendedData.binarypath;
-            ntps = dict.extendedData.maxIdx;
             idxLength = ntps.toString().length;
             getConf();
         } else {
             throw "improper extendedData format";
             return
         }
-        if ('fine_range' in dict.extendedData) {
-            fine_range = dict.extendedData.fine_range;
-        } else {
-            fine_range = 50;
-        }
+
+        
         //Plot initial data 
         Plotly.newPlot(graphDiv, data=fig0.data, layout=fig0.layout, {showLink: false});
         Plotly.newPlot(graphDiv2, data=fig1.data, layout=fig1.layout, {showLink: false});
+
+
         //console.log(graphDiv2._fullLayout)
         //Collect trace objects and tvert data
         traces = new Array(fig0.data.length);
@@ -172,13 +171,7 @@ var createSurface4d = function (pathin, element) {
         var displayF = gui.addFolder('3D Display');
         displayF.add(guiVars, 'loThresh').min(-100).max(guiVars.hiThresh).onChange(selectData);
         displayF.add(guiVars, 'hiThresh').min(-100).max(guiVars.hiThresh).onChange(selectData);
-        //displayF.add(guiVars, 'colormap', colormaps).onChange(changeColormap);
         displayF.add(guiVars, 'opacity').min(0).max(0.99).onChange(changeOpacity);
-        
-        //dataF = gui.addFolder('Data');
-        //dataF.
-
-
 
         jquery(gui.domElement.getElementsByTagName('option')).css('color','#000000')
         jquery(gui.domElement.getElementsByTagName('select')).css('color','#000000')
@@ -188,10 +181,10 @@ var createSurface4d = function (pathin, element) {
         
         displayF.open();
 
-        axisLims[0] = graphDiv2._fullLayout.xaxis._tmin
-        axisLims[1] = graphDiv2._fullLayout.xaxis._tmax
+        axisLims[0] = graphDiv2._fullLayout.xaxis.range[0]
+        axisLims[1] = graphDiv2._fullLayout.xaxis.range[1]
 
-        console.log(graphDiv._fullLayout)
+        //console.log(graphDiv2._fullLayout)
 
         //Initial recalc based on default settings
         changeColormap();
@@ -202,26 +195,19 @@ var createSurface4d = function (pathin, element) {
 
         watch(graphDiv2, ['_replotting'], function(){
             if (graphDiv2._replotting==false) {
-                timeShift(graphDiv2._fullLayout.xaxis._tmin, graphDiv2._fullLayout.xaxis._tmax)
+                timeShift()
             }
         })
 
         watch(graphDiv2, ['_dragging'], function(){
             if (graphDiv2._dragging==true) {
-                var startTmin = graphDiv2._fullLayout.xaxis._tmin
-                var startTmax = graphDiv2._fullLayout.xaxis._tmax
-                var xtimeLength = startTmax - startTmin
-                var xpixelLength = graphDiv2._fullLayout._plots.xy.plot[0][0].viewBox.animVal.width
-                var pixelToTime = xtimeLength/xpixelLength
                 var panshift
                 var id = setInterval(xShift,33)
                 function xShift() {
                     if (graphDiv2._dragging==false) {
                         clearInterval(id)
                     } else {
-                        console.log(pixelToTime)
-                        panshift = graphDiv2._fullLayout._plots.xy.plot[0][0].viewBox.animVal.x * pixelToTime
-                        timeShift(startTmin+panshift, startTmax+panshift) 
+                        timeShift() 
                     }
                 }
             }
@@ -272,11 +258,14 @@ function changeColormap() {
     traces[0].scene.glplot.redraw(); 
 }
 
-function timeShift(tmin,tmax){
-    guiVars.time = Math.round((tmax + tmin)/2)
+function timeShift(){
+    guiVars.time = Math.round((graphDiv2._fullLayout.xaxis.range[0] + graphDiv2._fullLayout.xaxis.range[1])/2)
     guiVars.time=Math.max(guiVars.time, axisLims[0])
     guiVars.time=Math.min(guiVars.time, axisLims[1])
-    selectData()
+    if (guiVars.time!=lastTime) {
+        lastTime = guiVars.time
+        selectData()
+    }
 }
 
 function changeOpacity() {
