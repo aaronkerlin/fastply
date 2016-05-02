@@ -50,6 +50,7 @@ var traceIdx,
     scalars,
     traces,
     ntps,
+    intensityBounds,
     lastTime,
     fine_range,
     rangeslider,
@@ -125,7 +126,9 @@ var createSurface4d = function (pathin, element) {
         if ('fixedSurfaces' in dict.extendedData) {
                 fixedSurfaces = dict.extendedData.fixedSurfaces
         } 
-
+        if ('intensityBounds' in dict.extendedData) {
+                intensityBounds = dict.extendedData.intensityBounds
+        } 
         
         //Plot initial data 
         Plotly.newPlot(graphDiv, data=fig0.data, layout=fig0.layout, {showLink: false});
@@ -173,10 +176,15 @@ var createSurface4d = function (pathin, element) {
         gui = new dat.GUI({ autoPlace: false })
         outputCell.insertBefore(gui.domElement, outputCell.firstChild);
         
-        var displayF = gui.addFolder('3D Display');
-        displayF.add(guiVars, 'loThresh').min(-100).max(guiVars.hiThresh).onChange(selectData);
-        displayF.add(guiVars, 'hiThresh').min(-100).max(guiVars.hiThresh).onChange(selectData);
+        var displayF = gui.addFolder('3D Display')
+        displayF.add(guiVars, 'loThresh').min(intensityBounds[0]).max(intensityBounds[1]).onChange(selectData);
+        displayF.add(guiVars, 'hiThresh').min(intensityBounds[0]).max(intensityBounds[1]).onChange(selectData);
         displayF.add(guiVars, 'opacity').min(0).max(0.99).onChange(changeOpacity);
+
+        //var traceF = guiFolder('Data')
+        //traceF
+
+
 
         jquery(gui.domElement.getElementsByTagName('option')).css('color','#000000')
         jquery(gui.domElement.getElementsByTagName('select')).css('color','#000000')
