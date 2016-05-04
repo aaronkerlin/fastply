@@ -50,11 +50,18 @@ var traceIdx,
     scalars,
     traces,
     ntps,
+    fig3d,
+    figs2d,
+    misc,
     plotnames,
     plotshow, 
     tracenames, 
     traceydata, 
     traceshow, 
+    axisId,
+    traceId,
+    pcount,
+    tcount,
     traceF,
     intensityBounds,
     lastTime,
@@ -67,6 +74,7 @@ var traceIdx,
     gui,
     shape,
     conf,
+    initialized = false,
     tController,
     guiVars,
     notebookMode = false,
@@ -114,10 +122,11 @@ var createSurface4d = function (pathin, element) {
             return
         }
 
-        var fig3d  = dict.fig3d;
-        var figs2d = dict.figs2d;
+        fig3d  = dict.fig3d;
+        figs2d = dict.figs2d;
+        misc = dict.misc
         
-        ntps = figs2d[0].initialFig.data[0].x.length
+        ntps = misc.volumeIndex.length
         if ('list' in fig3d) {
             dataArray = fig3d.list;
         } else if ('binarypath' in fig3d) {
@@ -143,11 +152,33 @@ var createSurface4d = function (pathin, element) {
                 surfaceSets.names = ["All"]
                 surfaceSets.indicies = [[]]
         }
-        
-        //Plot initial data 
-        Plotly.newPlot(graphDiv, data=fig3d.initialFig.data, layout=fig3d.initialFig.layout, {showLink: false});
-        Plotly.newPlot(graphDiv2, figs2d[0].initialFig.data, figs2d[0].initialFig.layout, {showLink: false});
 
+
+        plotnames = new Array(figs2d.length)
+        plotshow = new Array(figs2d.length)
+        tracenames = new Array(figs2d.length)
+        traceydata = new Array(figs2d.length)
+        traceshow = new Array(figs2d.length)
+        for (i=0; i<figs2d.length; i++) {
+            plotnames[i]=figs2d[i].name
+            plotshow[i] = true
+            var tn = new Array(figs2d[i].traces.length)
+            var ty = new Array(figs2d[i].traces.length)
+            var ts = new Array(figs2d[i].traces.length)
+            for (j=0; j<figs2d[i].traces.length; j++) {
+                tn[j]=figs2d[i].traces[j].name
+                ty[j]=figs2d[i].traces[j].ydata
+                ts[j]=true
+            }
+            tracenames[i]=tn
+            traceydata[i]=ty
+            traceshow[i]=ts       
+        }
+        
+        //Plot initial 3d figure 
+        Plotly.newPlot(graphDiv, data=fig3d.initialFig.data, layout=fig3d.initialFig.layout, {showLink: false});
+        //Plot initial 2d figure
+        plot2d()
 
         //console.log(graphDiv2._fullLayout)
         //Collect trace objects and tvert data
@@ -178,27 +209,6 @@ var createSurface4d = function (pathin, element) {
             pool.freeFloat(tverts); 
             tverts.length=0;
             window.fastply.length=0;
-        }
-
-        plotnames = new Array(figs2d.length)
-        plotshow = new Array(figs2d.length)
-        tracenames = new Array(figs2d.length)
-        traceydata = new Array(figs2d.length)
-        traceshow = new Array(figs2d.length)
-        for (i=0; i<figs2d.length; i++) {
-            plotnames[i]=figs2d[i].name
-            plotshow[i] = true
-            var tn = new Array(figs2d[i].traces.length)
-            var ty = new Array(figs2d[i].traces.length)
-            var ts = new Array(figs2d[i].traces.length)
-            for (j=0; j<figs2d[i].traces.length; j++) {
-                tn[j]=figs2d[i].traces[j].name
-                ty[j]=figs2d[i].traces[j].ydata
-                ts[j]=true
-            }
-            tracenames[i]=tn
-            traceydata[i]=ty
-            traceshow[i]=ts       
         }
 
         //take defaults from first surface
@@ -279,6 +289,87 @@ var createSurface4d = function (pathin, element) {
     })
 }
 
+function plot2d(){
+    var data = []
+    var layout = misc.baseLayout2D
+    pcount = 0
+    tcount = 0
+    var pTotal = 0
+    var domain = 0
+    var yIdx = ''
+    axisId = new Array(plotnames.length)
+    traceId = new Array(plotnames.length)
+    for (i = 0; i < plotnames.length; i++) {
+        var ti = new Array(tracenames[i].length) 
+        for (j = 0; j < tracenames[i].length; j++) {
+            ti[j] = 0
+        }
+        traceId[i] = ti
+        pTotal++
+    }
+    var domainInc = 1 / pTotal
+    for (i = 0; i < plotnames.length; i++) {
+        if (plotshow[i]) {
+            pcount++
+            axisId[i] = pcount
+            for (j=0; j<tracenames[i].length; j++) {
+                if (traceshow[i][j]) {
+                    traceId[i][j] = tcount
+                    tcount++
+                    var trace = {
+                        x: misc.volumeIndex,
+                        y: traceydata[i][j],
+                        type: 'scatter',
+                        name: tracenames[i][j],
+                        yaxis: 'y' + pcount.toString()
+                    }
+                    data.push(trace) 
+                }
+            }
+            if (pcount>1) {
+                yIdx = pcount.toString() 
+            }
+            layout['yaxis'+ yIdx] = {domain: [domain, domain+domainInc]}
+            domain = domain + domainInc
+        }
+    }
+    if (!initialized) {
+        Plotly.newPlot(graphDiv2, data, layout, {showLink: false})
+        initialized = true
+    } else {
+        graphDiv2.data = data
+        graphDiv2.layout = layout
+        Plotly.redraw(graphDiv2)
+    }
+    
+}
+
+function addTrace(){
+    var pi = axisId[guiVars.plotIdx]
+    var trace = {
+        y: traceydata[guiVars.plotIdx][guiVars.tracesIdx],
+        type: 'scatter',
+        name: tracenames[guiVars.plotIdx][guiVars.tracesIdx],
+        yaxis: 'y' + pi.toString()
+    }
+    Plotly.addTraces(graphDiv2, trace)
+    traceId[guiVars.plotIdx][guiVars.tracesIdx] = tcount++
+}
+
+function deleteTrace(){
+    var ti = traceId[guiVars.plotIdx][guiVars.tracesIdx]
+    Plotly.deleteTraces(graphDiv2, ti)
+        
+    for (i = 0; i < plotnames.length; i++) {
+        for (j=0; j<tracenames[i].length; j++) {
+            if (traceId[i][j] > ti) {
+                traceId[i][j]--
+            }
+        }    
+    }    
+    traceId[guiVars.plotIdx][guiVars.tracesIdx] = 0
+    tcount--
+}
 
 function plotChange(){
     guiVars.plotIdx = plotnames.indexOf(guiVars.plotSet)
@@ -302,6 +393,7 @@ function plotShow(){
         return
     }
     plotshow[guiVars.plotIdx] = guiVars.show_plot
+    plot2d()
 }
 
 function traceChange() {
@@ -311,6 +403,11 @@ function traceChange() {
 
 function traceShow(){
     traceshow[guiVars.plotIdx][guiVars.tracesIdx] = guiVars.show_trace
+    if (guiVars.show_trace) {
+        addTrace()
+    } else {
+        deleteTrace()
+    }
 }
 
 
