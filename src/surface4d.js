@@ -56,7 +56,7 @@ var traceIdx,
     plotnames,
     plotshow, 
     tracenames, 
-    traceydata, 
+    tracedata, 
     traceshow, 
     axisId,
     traceId,
@@ -97,10 +97,12 @@ var createSurface4d = function (pathin, element) {
     if (!element) {
         //append to document
         document.body.appendChild(graphDiv);
+        document.body.appendChild(graphDiv2);
         outputCell = graphDiv;
     } else {
         //In notebook
         notebookMode = true
+
         //append to output cell
         element.append(graphDiv);
         element.append(graphDiv2);
@@ -143,9 +145,12 @@ var createSurface4d = function (pathin, element) {
         } 
         if ('intensityBounds' in fig3d) {
                 intensityBounds = fig3d.intensityBounds
+                        console.log(intensityBounds)
         } 
         if ('surfaceSets' in fig3d) {
                 surfaceSets = fig3d.surfaceSets
+                console.log(surfaceSets.names)  
+                console.log(surfaceSets.indicies)  
                 surfaceSets.names.push("All")
                 surfaceSets.indicies.push([])
         } else {
@@ -157,21 +162,21 @@ var createSurface4d = function (pathin, element) {
         plotnames = new Array(figs2d.length)
         plotshow = new Array(figs2d.length)
         tracenames = new Array(figs2d.length)
-        traceydata = new Array(figs2d.length)
+        tracedata = new Array(figs2d.length)
         traceshow = new Array(figs2d.length)
         for (i=0; i<figs2d.length; i++) {
             plotnames[i]=figs2d[i].name
             plotshow[i] = true
             var tn = new Array(figs2d[i].traces.length)
-            var ty = new Array(figs2d[i].traces.length)
+            var td = new Array(figs2d[i].traces.length)
             var ts = new Array(figs2d[i].traces.length)
             for (j=0; j<figs2d[i].traces.length; j++) {
                 tn[j]=figs2d[i].traces[j].name
-                ty[j]=figs2d[i].traces[j].ydata
+                td[j]=figs2d[i].traces[j]
                 ts[j]=true
             }
             tracenames[i]=tn
-            traceydata[i]=ty
+            tracedata[i]=td
             traceshow[i]=ts       
         }
         
@@ -316,12 +321,10 @@ function plot2d(){
                 if (traceshow[i][j]) {
                     traceId[i][j] = tcount
                     tcount++
-                    var trace = {
-                        x: misc.volumeIndex,
-                        y: traceydata[i][j],
-                        type: 'scatter',
-                        name: tracenames[i][j],
-                        yaxis: 'y' + pcount.toString()
+                    var trace = tracedata[i][j]
+                    trace.yaxis = 'y' + pcount.toString()
+                    if (!('x' in trace)) {
+                        trace.x = misc.volumeIndex
                     }
                     data.push(trace) 
                 }
@@ -346,12 +349,8 @@ function plot2d(){
 
 function addTrace(){
     var pi = axisId[guiVars.plotIdx]
-    var trace = {
-        y: traceydata[guiVars.plotIdx][guiVars.tracesIdx],
-        type: 'scatter',
-        name: tracenames[guiVars.plotIdx][guiVars.tracesIdx],
-        yaxis: 'y' + pi.toString()
-    }
+    var trace = tracedata[guiVars.plotIdx][guiVars.tracesIdx]
+    trace.yaxis = 'y' + pi.toString()
     Plotly.addTraces(graphDiv2, trace)
     traceId[guiVars.plotIdx][guiVars.tracesIdx] = tcount++
 }
