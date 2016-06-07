@@ -18,7 +18,7 @@ class fastply(object):
 
 	def save(self, filename, data):
 		"""	Save formatted plot data to disk
-		:param: filename: path to save pickle file	
+		:param: filename: path to save pickle and html file	
 		:param: fig: plotly-formatted dict defining initial plot
 		:param: extendedData: additional data (i.e., more time points)
 
@@ -31,8 +31,19 @@ class fastply(object):
 					binarypath: path to folder binary file per time point (cannot exceed 5MB/time point)
 
 		"""
+		fname = filename[(len(self.remoteroot)+1):]
+		html_str = ['<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + filename +
+				'</title></head><body></body><script src=' +
+				'/lib/fastply.min.js></script><script type="text/Javascript">fastply.surface4d("' +
+				'http://' + self.localhost + '/' + fname + '.p");  </script></html>']
+
+		Html_file= open(filename+'.html',"w")
+		Html_file.write(html_str[0])
+		Html_file.close()
+
 		cPickle.dump(data,
-             open(filename, "wb" ))
+             open(filename+'.p', "wb" ))
+
 
 
 

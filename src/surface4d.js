@@ -64,6 +64,7 @@ var traceIdx,
     tcount,
     traceF,
     intensityBounds,
+    intensityThresh,
     lastTime,
     fine_range,
     rangeslider,
@@ -88,11 +89,11 @@ var createSurface4d = function (pathin, element) {
     graphDiv = document.createElement('div');
     graphId =  uuid.v4();
     graphDiv.id = graphId;
-    graphDiv.style.width = 85 +'%';
+    graphDiv.style.width = 70 +'%';
     graphDiv2 = document.createElement('div');
     graphId2 =  uuid.v4();
     graphDiv2.id = graphId2;
-    graphDiv2.style.width = 85 +'%';
+    graphDiv2.style.width = 100 +'%';
 
     if (!element) {
         //append to document
@@ -141,21 +142,23 @@ var createSurface4d = function (pathin, element) {
         }
 
         if ('fixedSurfaces' in fig3d) {
-                fixedSurfaces = fig3d.fixedSurfaces
+            fixedSurfaces = fig3d.fixedSurfaces
         } 
         if ('intensityBounds' in fig3d) {
-                intensityBounds = fig3d.intensityBounds
-                        console.log(intensityBounds)
-        } 
-        if ('surfaceSets' in fig3d) {
-                surfaceSets = fig3d.surfaceSets
-                console.log(surfaceSets.names)  
-                console.log(surfaceSets.indicies)  
-                surfaceSets.names.push("All")
-                surfaceSets.indicies.push([])
+            intensityBounds = fig3d.intensityBounds
+        }
+        if ('intensityThresh' in fig3d) {
+            intensityThresh = fig3d.intensityThresh
         } else {
-                surfaceSets.names = ["All"]
-                surfaceSets.indicies = [[]]
+            intensityThresh = [0.0, 1.0]
+        }        
+        if ('surfaceSets' in fig3d) {
+            surfaceSets = fig3d.surfaceSets
+            surfaceSets.names.push("All")
+            surfaceSets.indicies.push([])
+        } else {
+            surfaceSets.names = ["All"]
+            surfaceSets.indicies = [[]]
         }
 
 
@@ -218,8 +221,8 @@ var createSurface4d = function (pathin, element) {
 
         //take defaults from first surface
         guiVars = {time: Math.round(ntps/2),
-            loThresh: trace.surface.intensityBounds[0],
-            hiThresh:  trace.surface.intensityBounds[1],
+            loThresh: intensityThresh[0],
+            hiThresh:  intensityThresh[1],
             opacity: trace.surface.opacity,
             surfaces: fig3d.surfaceSets.names[fig3d.surfaceSets.names.length-1],
             surfSetIdx: fig3d.surfaceSets.names.length-1, 
@@ -235,6 +238,8 @@ var createSurface4d = function (pathin, element) {
 
         //Setup GUI
         gui = new dat.GUI({ autoPlace: false })
+        gui.domElement.style.float = 'left'
+        outputCell.firstChild.style['margin-left'] = gui.domElement.style.width
         outputCell.insertBefore(gui.domElement, outputCell.firstChild);
         
         var displayF = gui.addFolder('3D Plot')
