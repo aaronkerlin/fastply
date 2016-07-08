@@ -1,6 +1,6 @@
 var Plotly = require('../lib/plotly-latest.min.js')
 var jpickle = require('jpickle')
-var getIntensity = require('../lib/getIntensity')
+var getUpsampled = require('../lib/getUpsampled')
 var getParams = require('../lib/getParams')
 var getTverts = require('../lib/getTverts')
 var jquery = require('jquery')
@@ -61,17 +61,21 @@ var traceIdx,
     axisId,
     traceId,
     pcount,
+    coordsUp,
     tcount,
     traceF,
+    maskDict,
     intensityBounds,
     intensityThresh,
     lastTime,
     fine_range,
     rangeslider,
+    scatters,
     idxLength,
     fixedSurfaces = new Array,
     tverts,
     tptr,
+    maskObjs,
     gui,
     shape,
     conf,
@@ -141,6 +145,9 @@ var createSurface4d = function (pathin, element) {
             return
         }
 
+        if ('maskDict' in misc) {
+            maskDict = misc.maskDict
+        }
         if ('fixedSurfaces' in fig3d) {
             fixedSurfaces = fig3d.fixedSurfaces
         } 
@@ -154,8 +161,12 @@ var createSurface4d = function (pathin, element) {
         }        
         if ('surfaceSets' in fig3d) {
             surfaceSets = fig3d.surfaceSets
+            if (maskDict) {
+                surfaceSets.names.push("Masks")
+            }
             surfaceSets.names.push("All")
             surfaceSets.indicies.push([])
+
         } else {
             surfaceSets.names = ["All"]
             surfaceSets.indicies = [[]]
@@ -183,47 +194,92 @@ var createSurface4d = function (pathin, element) {
             traceshow[i]=ts       
         }
         
-        //Plot initial 3d figure 
+        //Plot initial 3d figure
+        if (maskDict) {
+            addMasks()
+        } 
         Plotly.newPlot(graphDiv, data=fig3d.initialFig.data, layout=fig3d.initialFig.layout, {showLink: false});
-        //Plot initial 2d figure
-        plot2d()
+        
+        
 
         //console.log(graphDiv2._fullLayout)
         //Collect trace objects and tvert data
         traces = new Array(fig3d.initialFig.data.length);
         var coords = new Array(fig3d.initialFig.data.length);
+        var coordsUp = new Array(fig3d.initialFig.data.length);
         tverts = new Array(fig3d.initialFig.data.length);
         var params;
         var trace;
+        var nMasks = 0
+        var nSurfs = 0
+        maskObjs = []
         for (var traceName in graphDiv._fullLayout.scene._scene.traces){
             trace = graphDiv._fullLayout.scene._scene.traces[traceName];
             if ('surface' in trace) { 
                 params = getParams(trace);
                 coords[trace.data.index] = params.coords;
-                intensity = getIntensity(trace);
-                params = {coords: coords, intensity: intensity};
+                var cu = new Array(3)
+                cu[0] = getUpsampled(trace, trace.data.x)
+                cu[1] = getUpsampled(trace, trace.data.y)
+                cu[2] = getUpsampled(trace, trace.data.z)
+                coordsUp[trace.data.index] = cu
+                intensity = getUpsampled(trace, trace.data.surfacecolor);
+                params = {coords: params.coords, intensity: intensity};
                 tverts[trace.data.index] = getTverts(trace.surface, params);
                 traces[trace.data.index] = trace;
                 trace.surface.opacity = Math.min(trace.surface.opacity,0.99);
+                nSurfs++
+            } else if ('mesh' in trace) {
+                nMasks++
+                maskObjs.push(trace)
             }
+
         }
+        
+        //Plot initial 2d figure
+        plot2d()
+        var layers = graphDiv2._fullLayout._plots.xy.plot[0][0].children
+        scatters = layers[layers.length-1]
+        colorMasks()
+        //console.log(maskObjs[0])
+
+        // for (var traceName in graphDiv._fullLayout.scene2._scene.traces){
+        //     var mesh = graphDiv._fullLayout.scene2._scene.traces[traceName];
+        //     if ('mesh' in mesh) {
+        //         nMasks++
+        //         maskObjs.push(mesh)
+        //     }
+        // }        
+        // graphDiv._fullLayout.scene._scene.camera = graphDiv._fullLayout.scene2._scene.camera
+        // console.log(traces)
+        // console.log(graphDiv._fullLayout)
+        // console.log(nMasks)
+        // console.log(nSurfs)
+        // traces=traces.slice(0,nSurfs)
+        // coords=coords.slice(0,nSurfs)
+        // tverts=tverts.slice(0,nSurfs)
+        traces=traces.slice(nMasks,traces.length)
+        coords=coords.slice(nMasks,coords.length)
+        coordsUp=coordsUp.slice(nMasks,coordsUp.length)
+        tverts=tverts.slice(nMasks,tverts.length)
         //traces[0].scene.fullLayout.title='Hi'
-        shape = trace.surface.shape.slice();
+        shape = traces[0].surface.shape.slice();
         tptr = (shape[0] - 1) * (shape[1] - 1) * 6 * 10;
         //var glplot = trace.scene.glplot;
         graphDiv.onremove = function () {
-            trace.scene.destroy(); 
+            traces[0].scene.destroy(); 
             gui.length=0;
             pool.freeFloat(tverts); 
             tverts.length=0;
             window.fastply.length=0;
         }
 
+
         //take defaults from first surface
         guiVars = {time: Math.round(ntps/2),
             loThresh: intensityThresh[0],
             hiThresh:  intensityThresh[1],
-            opacity: trace.surface.opacity,
+            opacity: 0.8,//traces[traces.length-1].surface.opacity,
             surfaces: fig3d.surfaceSets.names[fig3d.surfaceSets.names.length-1],
             surfSetIdx: fig3d.surfaceSets.names.length-1, 
             show_surf: true,
@@ -244,7 +300,7 @@ var createSurface4d = function (pathin, element) {
         
         var displayF = gui.addFolder('3D Plot')
         displayF.add(guiVars, 'surfaces',fig3d.surfaceSets.names)
-        displayF.add(guiVars, 'show_surf')
+        displayF.add(guiVars, 'show_surf')//.onChange(toggleVis)
         displayF.add(guiVars, 'loThresh').min(intensityBounds[0]).max(intensityBounds[1]).onChange(selectData);
         displayF.add(guiVars, 'hiThresh').min(intensityBounds[0]).max(intensityBounds[1]).onChange(selectData);
         displayF.add(guiVars, 'opacity').min(0).max(0.99).onChange(changeOpacity);
@@ -274,7 +330,34 @@ var createSurface4d = function (pathin, element) {
         selectData();
         changeOpacity();
 
-        
+
+        graphDiv.on('plotly_click', function(ev){
+            var ptNum = ev.points[0].pointNumber
+            var clickLoc = Array(3)
+            if (ptNum.length ==2){
+                var curveNum = ev.points[0].curveNumber - nMasks
+                for (i=0; i<3; i++) {
+                    clickLoc[i] = Math.round(coordsUp[curveNum][i].get(ptNum[0],ptNum[1]))
+                }
+            } else {
+                clickLoc[0] = ev.points[0].data.x[ptNum]
+                clickLoc[1] = ev.points[0].data.y[ptNum]
+                clickLoc[2] = ev.points[0].data.z[ptNum]
+            }
+            console.log(clickLoc)
+        })
+        // Grab the embed's contentWindow by the iframe id
+        //console.log(graphDiv)
+        // var plot0 = document.getElementById(graphId.toString()).contentWindow;
+        // console.log(plot0)
+        // // send a message to the contentWindow
+        // plot0.postMessage(
+        // {
+        //     task: 'listen',
+        //     events: ['zoom','click','hover']
+        // }, 'http://spinevis.int.janelia.org');
+            
+        // window.addEventListener('message',clickResponse,false)
 
         watch(graphDiv2, ['_replotting'], function(){
             if (graphDiv2._replotting==false) {
@@ -297,6 +380,36 @@ var createSurface4d = function (pathin, element) {
         })
 
     })
+}
+
+function clickResponse(e){
+    console.log(e)
+}
+// function toggleVis(){
+//     console.log(traces[0])
+//     if (guiVars.surfaces == 'Masks') {
+//         var idx = []    
+//         for (i=0; i<maskObjs.length; i++){
+//             idx.push(i)
+//         }
+//         Plotly.restyle(graphDiv,{'visible':guiVars.show_surf},idx)
+//     } else {
+//         for (i=0;i<traces.length;i++){
+//             traces[i].surface.visible = guiVars.show_surf;
+//             traces[i].surface.dirty = true
+//         }
+//     }
+// }
+
+function addMasks(){
+    console.log(maskDict)
+    var Polys = maskDict.Polys
+    var Pts = maskDict.Pts
+    for (i=Polys.length-1; i>-1; i--) {
+        trace = {x: Pts[i][0], y: Pts[i][1], z: Pts[i][2], i: Polys[i][0], j: Polys[i][1], k: Polys[i][2], color: 'gray', showscale: false,
+        name: 'mask '+ i.toString(), opacity: 0.1, type: 'mesh3d','hoverinfo': 'name'}
+        fig3d.initialFig.data.unshift(trace)
+    }
 }
 
 function plot2d(){
@@ -350,6 +463,16 @@ function plot2d(){
         Plotly.redraw(graphDiv2)
     }
     
+}
+
+function colorMasks(){
+    for (var i=0; i<tracenames[0].length; i++) {
+        var maskIdx = tracenames[0][i].indexOf('mask')
+        if (maskIdx>=0) {
+            var meshId = parseInt(tracenames[0][i].substring(maskIdx+4,tracenames[0][i].length))
+            Plotly.restyle(graphDiv, {opacity: 0.8, color: scatters.children[i].children[0].style.stroke}, meshId)
+        } 
+    }
 }
 
 function addTrace(){
@@ -463,10 +586,17 @@ function timeShift(){
 }
 
 function changeOpacity() {
-    for (i=0;i<traces.length;i++){
-        traces[i].surface.opacity = guiVars.opacity;
+    if (guiVars.surfaces == 'Masks') {
+        for (i=0; i<maskObjs.length; i++){
+            maskObjs[i].mesh.opacity = guiVars.opacity;
+        }
+    } else {
+        for (i=0;i<traces.length;i++){
+            traces[i].surface.opacity = guiVars.opacity;
+        }
     }
-    traces[0].scene.glplot.redraw(); 
+    changeColormap();
+    //traces[0].scene.glplot.redraw(); 
 }
 
 function getConf() {
@@ -522,7 +652,7 @@ function getArray() {
 
 function updateIntensity() {
     for (var m=0;m<traces.length;m++){
-        intensity = getIntensity(traces[m]);
+        intensity = getUpsampled(traces[m], traces[m].data.surfacecolor);
         var count = 6;
         for (i = 0; i < shape[0] - 1; ++i) {
             for (j = 0; j < shape[1] - 1; ++j) {
