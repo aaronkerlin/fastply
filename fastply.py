@@ -33,8 +33,8 @@ class fastply(object):
 		"""
 		fname = filename[(len(self.remoteroot)+1):]
 		html_str = ['<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + filename +
-				'</title></head><body></body><script src=' +
-				'/lib/fastply.min.js></script><script type="text/Javascript">fastply.surface4d("' +
+				'</title></head><body></body><script src=/' + self.lib +
+				'/fastply.min.js></script><script type="text/Javascript">fastply.surface4d("' +
 				'http://' + self.localhost + '/' + fname + '.p");  </script></html>']
 
 		Html_file= open(filename+'.html',"w")

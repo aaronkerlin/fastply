@@ -69,7 +69,6 @@ var traceIdx,
     intensityThresh,
     lastTime,
     fine_range,
-    rangeslider,
     scatters,
     idxLength,
     fixedSurfaces = new Array,
@@ -346,18 +345,35 @@ var createSurface4d = function (pathin, element) {
             }
             console.log(clickLoc)
         })
-        // Grab the embed's contentWindow by the iframe id
-        //console.log(graphDiv)
-        // var plot0 = document.getElementById(graphId.toString()).contentWindow;
-        // console.log(plot0)
-        // // send a message to the contentWindow
-        // plot0.postMessage(
-        // {
-        //     task: 'listen',
-        //     events: ['zoom','click','hover']
-        // }, 'http://spinevis.int.janelia.org');
+
+        graphDiv2.on('plotly_relayout', function(ev){
+            if ('xaxis.range' in ev) {
+                console.log(ev)
+                var dur = ev['xaxis.range'][1] - ev['xaxis.range'][0]
+                var xSt = ev['xaxis.range'][0] - dur
+                var xEnd = ev['xaxis.range'][1] + dur
+                if (xEnd>tracedata[0][0].length) {
+                    xEnd=tracedata[0][0].length
+                }
+                if (xSt<0) {
+                    xSt=0
+                }
+                for (i=0; i<tracedata[0].length; i++) {
+                    if ('x' in tracedata[0][i]) {
+                        var x = tracedata[0][i].x
+                    } else {
+                        var x = misc.volumeIndex
+                    }
+                    subSt = x.findIndex(function(element,index,array) {return element>=xSt})
+                    subEnd = x.findIndex(function(element,index,array) {return element>=xEnd})
+                    graphDiv2.data[i].x=x.slice(subSt,subEnd)
+                    graphDiv2.data[i].y=tracedata[0][i].y.slice(subSt,subEnd)
+
+                }
+                Plotly.redraw(graphDiv2)
+            }
             
-        // window.addEventListener('message',clickResponse,false)
+        })
 
         watch(graphDiv2, ['_replotting'], function(){
             if (graphDiv2._replotting==false) {
@@ -382,9 +398,10 @@ var createSurface4d = function (pathin, element) {
     })
 }
 
-function clickResponse(e){
-    console.log(e)
-}
+//function clickResponse(e){
+//    console.log('hi')
+//    console.log(e)
+//}
 // function toggleVis(){
 //     console.log(traces[0])
 //     if (guiVars.surfaces == 'Masks') {
@@ -402,7 +419,6 @@ function clickResponse(e){
 // }
 
 function addMasks(){
-    console.log(maskDict)
     var Polys = maskDict.Polys
     var Pts = maskDict.Pts
     for (i=Polys.length-1; i>-1; i--) {
@@ -439,7 +455,7 @@ function plot2d(){
                 if (traceshow[i][j]) {
                     traceId[i][j] = tcount
                     tcount++
-                    var trace = tracedata[i][j]
+                    var trace = jquery.extend({},tracedata[i][j])
                     trace.yaxis = 'y' + pcount.toString()
                     if (!('x' in trace)) {
                         trace.x = misc.volumeIndex
