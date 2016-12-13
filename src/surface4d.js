@@ -116,6 +116,14 @@ var createSurface4d = function (pathin, element) {
         outputCell.removeChild(outputCell.firstElementChild);
     }
 
+    //var MongoClient = jsmongo.MongoClient
+    // var url = 'mongodb://spinevis.int.janelia.org:27017'
+    // MongoClient.connect(url, function(err, db) {
+    //     assert.equal(null, err)
+    //     console.log("Connected correctly to server.")
+    //     db.close()
+    // });
+
     var filePath = pathin;
     jquery.get(filePath,function(fileData){
 

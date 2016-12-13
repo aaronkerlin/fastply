@@ -21,6 +21,7 @@
     "dat-gui": "^0.5.0",
     "jpickle": "^0.4.1",
     "jquery": "^2.2.3",
+    "mongodb": "^2.2.0",
     "ndarray": "^1.0.18",
     "ndarray-fill": "^1.0.1",
     "ndarray-gradient": "^1.0.0",
