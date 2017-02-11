@@ -1,3 +1,4 @@
+
 var Plotly = require('../lib/plotly-latest.min.js')
 var jpickle = require('jpickle')
 var getUpsampled = require('../lib/getUpsampled')
@@ -16,6 +17,7 @@ var watch = WatchJS.watch;
 var unwatch = WatchJS.unwatch;
 var callWatchers = WatchJS.callWatchers;
 
+//constant for inensity calculations
 var QUAD = [
   [0, 0],
   [0, 1],
@@ -54,10 +56,10 @@ var traceIdx,
     figs2d,
     misc,
     plotnames,
-    plotshow, 
-    tracenames, 
-    tracedata, 
-    traceshow, 
+    plotshow,
+    tracenames,
+    tracedata,
+    traceshow,
     axisId,
     traceId,
     pcount,
@@ -89,15 +91,18 @@ var traceIdx,
     graphID;
 
 var createSurface4d = function (pathin, element) {
+  //create div for 3d graph
     graphDiv = document.createElement('div');
     graphId =  uuid.v4();
     graphDiv.id = graphId;
     graphDiv.style.width = 70 +'%';
+  //create div for 2d graphs
     graphDiv2 = document.createElement('div');
     graphId2 =  uuid.v4();
     graphDiv2.id = graphId2;
     graphDiv2.style.width = 100 +'%';
 
+    //adjust how divs are added depending on if we are in jupyter notebook or standalone webpage
     if (!element) {
         //append to document
         document.body.appendChild(graphDiv);
@@ -116,6 +121,7 @@ var createSurface4d = function (pathin, element) {
         outputCell.removeChild(outputCell.firstElementChild);
     }
 
+    //starting to play with Mongo
     //var MongoClient = jsmongo.MongoClient
     // var url = 'mongodb://spinevis.int.janelia.org:27017'
     // MongoClient.connect(url, function(err, db) {
@@ -124,27 +130,29 @@ var createSurface4d = function (pathin, element) {
     //     db.close()
     // });
 
-    var filePath = pathin;
+
+    var filePath = pathin; //path to pickle file
     jquery.get(filePath,function(fileData){
 
         //load the data
-        var dict = jpickle.loads(fileData);
-        try { 
-            var test = ('fig3d' in dict);
+        var dict = jpickle.loads(fileData); //load pickle file dictionary
+        try {
+            var test = ('fig3d' in dict); //check that fig3d exists
         } catch (err) {
             throw "improper dictionary format";
             return
         }
 
+        //copy the three main dictionaries
         fig3d  = dict.fig3d;
         figs2d = dict.figs2d;
         misc = dict.misc
-        
-        ntps = misc.volumeIndex.length
+
+        ntps = misc.volumeIndex.length //total number of timepoints
         if ('list' in fig3d) {
-            dataArray = fig3d.list;
+            dataArray = fig3d.list; //obsolete
         } else if ('binarypath' in fig3d) {
-            binarypath = fig3d.binarypath;
+            binarypath = fig3d.binarypath; //path to binary intensity data
             idxLength = ntps.toString().length;
             getConf();
         } else {
@@ -153,25 +161,25 @@ var createSurface4d = function (pathin, element) {
         }
 
         if ('maskDict' in misc) {
-            maskDict = misc.maskDict
+            maskDict = misc.maskDict //mask 3d polygon information
         }
         if ('fixedSurfaces' in fig3d) {
-            fixedSurfaces = fig3d.fixedSurfaces
-        } 
+            fixedSurfaces = fig3d.fixedSurfaces //list of surfaces that do not change intensity with time
+        }
         if ('intensityBounds' in fig3d) {
-            intensityBounds = fig3d.intensityBounds
+            intensityBounds = fig3d.intensityBounds //min and max possible intensity values
         }
         if ('intensityThresh' in fig3d) {
-            intensityThresh = fig3d.intensityThresh
+            intensityThresh = fig3d.intensityThresh //default LUT thresholds
         } else {
             intensityThresh = [0.0, 1.0]
-        }        
+        }
         if ('surfaceSets' in fig3d) {
-            surfaceSets = fig3d.surfaceSets
+            surfaceSets = fig3d.surfaceSets // Sets of 3d objects to be manipulated independently
             if (maskDict) {
-                surfaceSets.names.push("Masks")
+                surfaceSets.names.push("Masks") //add all masks as a set
             }
-            surfaceSets.names.push("All")
+            surfaceSets.names.push("All") //Allows you to change properties of all sets at once
             surfaceSets.indicies.push([])
 
         } else {
@@ -179,12 +187,12 @@ var createSurface4d = function (pathin, element) {
             surfaceSets.indicies = [[]]
         }
 
-
-        plotnames = new Array(figs2d.length)
-        plotshow = new Array(figs2d.length)
-        tracenames = new Array(figs2d.length)
-        tracedata = new Array(figs2d.length)
-        traceshow = new Array(figs2d.length)
+        //convert 2D plot data into nested arrays
+        plotnames = new Array(figs2d.length) //name of each plot
+        plotshow = new Array(figs2d.length) //boolean which plots showing
+        tracenames = new Array(figs2d.length) //name of each trace
+        tracedata = new Array(figs2d.length) //y-data for each trace
+        traceshow = new Array(figs2d.length) //boolean which traces to show
         for (i=0; i<figs2d.length; i++) {
             plotnames[i]=figs2d[i].name
             plotshow[i] = true
@@ -198,97 +206,85 @@ var createSurface4d = function (pathin, element) {
             }
             tracenames[i]=tn
             tracedata[i]=td
-            traceshow[i]=ts       
+            traceshow[i]=ts
         }
-        
-        //Plot initial 3d figure
+
+        //add mask 3d meshes
         if (maskDict) {
             addMasks()
-        } 
+        }
+        //Plot initial 3d figure
         Plotly.newPlot(graphDiv, data=fig3d.initialFig.data, layout=fig3d.initialFig.layout, {showLink: false});
-        
-        
 
-        //console.log(graphDiv2._fullLayout)
-        //Collect trace objects and tvert data
-        traces = new Array(fig3d.initialFig.data.length);
-        var coords = new Array(fig3d.initialFig.data.length);
-        var coordsUp = new Array(fig3d.initialFig.data.length);
-        tverts = new Array(fig3d.initialFig.data.length);
+
+
+
+        //Collect surface trace objects and tvert data
+        traces = new Array(fig3d.initialFig.data.length); //copy of surface objects
+        var coords = new Array(fig3d.initialFig.data.length); //original coordinate data
+        var coordsUp = new Array(fig3d.initialFig.data.length); //upsampled coordinate data
+        tverts = new Array(fig3d.initialFig.data.length); //3d data in webGL ready format
         var params;
         var trace;
         var nMasks = 0
         var nSurfs = 0
         maskObjs = []
-        for (var traceName in graphDiv._fullLayout.scene._scene.traces){
+        for (var traceName in graphDiv._fullLayout.scene._scene.traces){//grabbing 3d objects from the current scene
             trace = graphDiv._fullLayout.scene._scene.traces[traceName];
-            if ('surface' in trace) { 
-                params = getParams(trace);
+            if ('surface' in trace) { //check that object is a surface
+                params = getParams(trace); //prepare objects for conversion
                 coords[trace.data.index] = params.coords;
                 var cu = new Array(3)
-                cu[0] = getUpsampled(trace, trace.data.x)
-                cu[1] = getUpsampled(trace, trace.data.y)
-                cu[2] = getUpsampled(trace, trace.data.z)
+                cu[0] = getUpsampled(trace, trace.data.x) //upsample x for display
+                cu[1] = getUpsampled(trace, trace.data.y) //upsample y for display
+                cu[2] = getUpsampled(trace, trace.data.z) //upsample z for display
                 coordsUp[trace.data.index] = cu
-                intensity = getUpsampled(trace, trace.data.surfacecolor);
+                intensity = getUpsampled(trace, trace.data.surfacecolor); //upsample intensity for display
                 params = {coords: params.coords, intensity: intensity};
-                tverts[trace.data.index] = getTverts(trace.surface, params);
+                tverts[trace.data.index] = getTverts(trace.surface, params); //convert to webGL ready format
                 traces[trace.data.index] = trace;
-                trace.surface.opacity = Math.min(trace.surface.opacity,0.99);
+                trace.surface.opacity = Math.min(trace.surface.opacity,0.99); //force opacity to 0.99 or lower
                 nSurfs++
-            } else if ('mesh' in trace) {
+            } else if ('mesh' in trace) {//check that object is a mesh
                 nMasks++
                 maskObjs.push(trace)
             }
 
         }
-        
+
         //Plot initial 2d figure
         plot2d()
         var layers = graphDiv2._fullLayout._plots.xy.plot[0][0].children
         scatters = layers[layers.length-1]
         colorMasks()
-        //console.log(maskObjs[0])
 
-        // for (var traceName in graphDiv._fullLayout.scene2._scene.traces){
-        //     var mesh = graphDiv._fullLayout.scene2._scene.traces[traceName];
-        //     if ('mesh' in mesh) {
-        //         nMasks++
-        //         maskObjs.push(mesh)
-        //     }
-        // }        
-        // graphDiv._fullLayout.scene._scene.camera = graphDiv._fullLayout.scene2._scene.camera
-        // console.log(traces)
-        // console.log(graphDiv._fullLayout)
-        // console.log(nMasks)
-        // console.log(nSurfs)
-        // traces=traces.slice(0,nSurfs)
-        // coords=coords.slice(0,nSurfs)
-        // tverts=tverts.slice(0,nSurfs)
+
+       //not sure why this is necessary given traces shouldn't have meshes
         traces=traces.slice(nMasks,traces.length)
         coords=coords.slice(nMasks,coords.length)
         coordsUp=coordsUp.slice(nMasks,coordsUp.length)
         tverts=tverts.slice(nMasks,tverts.length)
-        //traces[0].scene.fullLayout.title='Hi'
+
         shape = traces[0].surface.shape.slice();
         tptr = (shape[0] - 1) * (shape[1] - 1) * 6 * 10;
-        //var glplot = trace.scene.glplot;
+
+        //trying to prevent orphan objects from building up in browser memory
         graphDiv.onremove = function () {
-            traces[0].scene.destroy(); 
+            traces[0].scene.destroy();
             gui.length=0;
-            pool.freeFloat(tverts); 
+            pool.freeFloat(tverts);
             tverts.length=0;
             window.fastply.length=0;
         }
 
 
-        //take defaults from first surface
+        //take GUI defaults from first surface
         guiVars = {time: Math.round(ntps/2),
             loThresh: intensityThresh[0],
             hiThresh:  intensityThresh[1],
-            opacity: 0.8,//traces[traces.length-1].surface.opacity,
+            opacity: 0.8,
             surfaces: fig3d.surfaceSets.names[fig3d.surfaceSets.names.length-1],
-            surfSetIdx: fig3d.surfaceSets.names.length-1, 
+            surfSetIdx: fig3d.surfaceSets.names.length-1,
             show_surf: true,
             plotSet: plotnames[0],
             plotIdx: 0,
@@ -299,12 +295,13 @@ var createSurface4d = function (pathin, element) {
             show_mask: 'not implemented'}
 
 
-        //Setup GUI
+        //Generate dat.GUI object and specify its placement in the div
         gui = new dat.GUI({ autoPlace: false })
         gui.domElement.style.float = 'left'
         outputCell.firstChild.style['margin-left'] = gui.domElement.style.width
         outputCell.insertBefore(gui.domElement, outputCell.firstChild);
-        
+
+        //Populate the 3D controls
         var displayF = gui.addFolder('3D Plot')
         displayF.add(guiVars, 'surfaces',fig3d.surfaceSets.names)
         displayF.add(guiVars, 'show_surf')//.onChange(toggleVis)
@@ -312,11 +309,12 @@ var createSurface4d = function (pathin, element) {
         displayF.add(guiVars, 'hiThresh').min(intensityBounds[0]).max(intensityBounds[1]).onChange(selectData);
         displayF.add(guiVars, 'opacity').min(0).max(0.99).onChange(changeOpacity);
 
+        //Populate the 2D controls
         traceF = gui.addFolder('2D Plot')
         traceF.add(guiVars, 'plotSet', plotnames).onChange(plotChange)
         traceF.add(guiVars, 'show_plot').listen().onChange(plotShow)
         traceF.add(guiVars, 'traces', tracenames[guiVars.plotIdx]).onChange(traceChange)
-        traceF.add(guiVars, 'show_trace').listen().onChange(traceShow)        
+        traceF.add(guiVars, 'show_trace').listen().onChange(traceShow)
 
         var maskF = gui.addFolder('Mask Selection')
         maskF.add(guiVars, 'show_mask')
@@ -324,20 +322,21 @@ var createSurface4d = function (pathin, element) {
         jquery(gui.domElement.getElementsByTagName('option')).css('color','#000000')
         jquery(gui.domElement.getElementsByTagName('select')).css('color','#000000')
 
-        
+        //Set all folders open
         displayF.open();
         traceF.open();
         maskF.open();
 
+        //get initial limits of the x-axis
         axisLims[0] = graphDiv2._fullLayout.xaxis.range[0]
         axisLims[1] = graphDiv2._fullLayout.xaxis.range[1]
 
-        //Initial recalc based on default settings
-        changeColormap();
-        selectData();
-        changeOpacity();
+        //Initial recalculations based on default settings
+        changeColormap();//reset colormap with alpha control
+        selectData();//grab intensity data for middle timepoint
+        changeOpacity();//update opacity to GUI default
 
-
+        //On click callback, save click position in clickLoc. May not currently be in use.
         graphDiv.on('plotly_click', function(ev){
             var ptNum = ev.points[0].pointNumber
             var clickLoc = Array(3)
@@ -354,6 +353,9 @@ var createSurface4d = function (pathin, element) {
             console.log(clickLoc)
         })
 
+        //relayout callback will occur whenever user zooms, finishes dragging,
+        //resets, adds or removes traces from a 2D plot. When this occurs we identify the new start and end
+        //of teh x-axis and limit the data activly drawn by plotly to that range
         graphDiv2.on('plotly_relayout', function(ev){
             if ('xaxis.range' in ev) {
                 console.log(ev)
@@ -380,15 +382,17 @@ var createSurface4d = function (pathin, element) {
                 }
                 Plotly.redraw(graphDiv2)
             }
-            
+
         })
 
+        //detect that replotting event occured and is complete, then call timeShift
         watch(graphDiv2, ['_replotting'], function(){
             if (graphDiv2._replotting==false) {
                 timeShift()
             }
         })
 
+        //detect that user is dragging the plot, call timeShift every 33 milliseconds
         watch(graphDiv2, ['_dragging'], function(){
             if (graphDiv2._dragging==true) {
                 var panshift
@@ -397,7 +401,7 @@ var createSurface4d = function (pathin, element) {
                     if (graphDiv2._dragging==false) {
                         clearInterval(id)
                     } else {
-                        timeShift() 
+                        timeShift()
                     }
                 }
             }
@@ -413,7 +417,7 @@ var createSurface4d = function (pathin, element) {
 // function toggleVis(){
 //     console.log(traces[0])
 //     if (guiVars.surfaces == 'Masks') {
-//         var idx = []    
+//         var idx = []
 //         for (i=0; i<maskObjs.length; i++){
 //             idx.push(i)
 //         }
@@ -426,6 +430,7 @@ var createSurface4d = function (pathin, element) {
 //     }
 // }
 
+//For each maskm, add a 3D mesh to the fig3d data
 function addMasks(){
     var Polys = maskDict.Polys
     var Pts = maskDict.Pts
@@ -436,6 +441,8 @@ function addMasks(){
     }
 }
 
+//Based on the "show" arrays (i.e., plotshow and traceshow) construct plotly format
+//data objects (i.e., traces).
 function plot2d(){
     var data = []
     var layout = misc.baseLayout2D
@@ -447,7 +454,7 @@ function plot2d(){
     axisId = new Array(plotnames.length)
     traceId = new Array(plotnames.length)
     for (i = 0; i < plotnames.length; i++) {
-        var ti = new Array(tracenames[i].length) 
+        var ti = new Array(tracenames[i].length)
         for (j = 0; j < tracenames[i].length; j++) {
             ti[j] = 0
         }
@@ -468,37 +475,40 @@ function plot2d(){
                     if (!('x' in trace)) {
                         trace.x = misc.volumeIndex
                     }
-                    data.push(trace) 
+                    data.push(trace)
                 }
             }
             if (pcount>1) {
-                yIdx = pcount.toString() 
+                yIdx = pcount.toString()
             }
             layout['yaxis'+ yIdx] = {domain: [domain, domain+domainInc]}
             domain = domain + domainInc
         }
     }
-    if (!initialized) {
+    if (!initialized) { //if first time run new plot
         Plotly.newPlot(graphDiv2, data, layout, {showLink: false})
         initialized = true
-    } else {
+    } else { //otherwise redraw is faster
         graphDiv2.data = data
         graphDiv2.layout = layout
         Plotly.redraw(graphDiv2)
     }
-    
+
 }
 
+//Color mask 3d meshes so that they match the color of the corresponding 2D trace
 function colorMasks(){
-    for (var i=0; i<tracenames[0].length; i++) {
+    for (var i=0; i<tracenames[0].length; i++) {//for each trace data
         var maskIdx = tracenames[0][i].indexOf('mask')
         if (maskIdx>=0) {
-            var meshId = parseInt(tracenames[0][i].substring(maskIdx+4,tracenames[0][i].length))
+            var meshId = parseInt(tracenames[0][i].substring(maskIdx+4,tracenames[0][i].length))//corresponsing maskID
+            //set color of mesh to style of equivalent line HTML object
             Plotly.restyle(graphDiv, {opacity: 0.8, color: scatters.children[i].children[0].style.stroke}, meshId)
-        } 
+        }
     }
 }
 
+//User selected to add new trace to a plot, check GUI for current trace and add it
 function addTrace(){
     var pi = axisId[guiVars.plotIdx]
     var trace = tracedata[guiVars.plotIdx][guiVars.tracesIdx]
@@ -507,21 +517,24 @@ function addTrace(){
     traceId[guiVars.plotIdx][guiVars.tracesIdx] = tcount++
 }
 
+//User selected to delete a trace from a plot, check GUI for current trace and add it
 function deleteTrace(){
     var ti = traceId[guiVars.plotIdx][guiVars.tracesIdx]
     Plotly.deleteTraces(graphDiv2, ti)
-        
+
     for (i = 0; i < plotnames.length; i++) {
         for (j=0; j<tracenames[i].length; j++) {
             if (traceId[i][j] > ti) {
                 traceId[i][j]--
             }
-        }    
-    }    
+        }
+    }
     traceId[guiVars.plotIdx][guiVars.tracesIdx] = 0
     tcount--
 }
 
+//User selected a different parent plot in the GUI, update the GUI traces and
+//show variables to reflect the current parent plot
 function plotChange(){
     guiVars.plotIdx = plotnames.indexOf(guiVars.plotSet)
     guiVars.show_plot = plotshow[guiVars.plotIdx]
@@ -531,13 +544,14 @@ function plotChange(){
     guiVars.show_trace = traceshow[guiVars.plotIdx][0]
     guiVars.traces = tracenames[guiVars.plotIdx][0]
     traceF.add(guiVars, 'traces', tracenames[guiVars.plotIdx]).onChange(traceChange)
-    traceF.add(guiVars, 'show_trace').listen().onChange(traceShow)  
+    traceF.add(guiVars, 'show_trace').listen().onChange(traceShow)
 
     jquery(gui.domElement.getElementsByTagName('option')).css('color','#000000')
     jquery(gui.domElement.getElementsByTagName('select')).css('color','#000000')
-      
+
 }
 
+//User changed the visibility of a plot. Change plotshow variable and call plot2d to replot everything
 function plotShow(){
     if (guiVars.plotIdx==0) {
         guiVars.show_plot = 1
@@ -547,11 +561,13 @@ function plotShow(){
     plot2d()
 }
 
+//User selected a different trace in the GUI, update checkbox to reflect if that trace is currently visible
 function traceChange() {
     guiVars.tracesIdx = tracenames[guiVars.plotIdx].indexOf(guiVars.traces)
     guiVars.show_trace = traceshow[guiVars.plotIdx][guiVars.tracesIdx]
 }
 
+//User clicked trace show checkbox. Add or delete trace accordingly.
 function traceShow(){
     traceshow[guiVars.plotIdx][guiVars.tracesIdx] = guiVars.show_trace
     if (guiVars.show_trace) {
@@ -562,6 +578,18 @@ function traceShow(){
 }
 
 
+//for each 3d surface, get its tinycolor-compatible colorscale string.
+//Then change the colormap of each rendered surface object to reflect a alpha-thresholded
+// rgba equivalent colormap
+function changeColormap() {
+    for (i=0;i<traces.length;i++){
+        var cs = traces[i].data.colorscale
+        traces[i].surface._colorMap.setPixels(genColormap(parseColorScale(cs)));
+    }
+    traces[0].scene.glplot.redraw();
+}
+
+//return rgba colormap from tinycolor-compatible colorscale string
 function parseColorScale(colorscale, alpha) {
     if(alpha === undefined) alpha = 1;
 
@@ -576,7 +604,7 @@ function parseColorScale(colorscale, alpha) {
     });
 }
 
-
+//return alpha-threhsolded webGL-compatible colormap from rgba colormap
 function genColormap (name) {
   var x = pack([colormap({
     colormap: name,
@@ -591,14 +619,7 @@ function genColormap (name) {
   return x
 }
 
-function changeColormap() {
-    for (i=0;i<traces.length;i++){
-        var cs = traces[i].data.colorscale
-        traces[i].surface._colorMap.setPixels(genColormap(parseColorScale(cs)));
-    }                    
-    traces[0].scene.glplot.redraw(); 
-}
-
+//x-axis may have moved. If axisLims have changed, call selectData to update 3d intensity
 function timeShift(){
     guiVars.time = Math.round((graphDiv2._fullLayout.xaxis.range[0] + graphDiv2._fullLayout.xaxis.range[1])/2)
     guiVars.time=Math.max(guiVars.time, axisLims[0])
@@ -609,6 +630,8 @@ function timeShift(){
     }
 }
 
+//User changed some opacity setting. Depedning on surface set, update the opacity of all objects within set.
+//Call changeColormap to update rgba lookup
 function changeOpacity() {
     if (guiVars.surfaces == 'Masks') {
         for (i=0; i<maskObjs.length; i++){
@@ -620,9 +643,10 @@ function changeOpacity() {
         }
     }
     changeColormap();
-    //traces[0].scene.glplot.redraw(); 
+    //traces[0].scene.glplot.redraw();
 }
 
+//Get dimensions of the binary data from the conf.json file in the binary folder
 function getConf() {
     var fname = binarypath + '/conf.json';
     var xhr = new XMLHttpRequest();
@@ -634,6 +658,7 @@ function getConf() {
     xhr.send();
 }
 
+//Get binary file data, save it to traces object and call updateIntensity
 function getBinary() {
     var strIdx = '';
     for (i=0; i<(idxLength-guiVars.time.toString().length);i++){
@@ -645,12 +670,14 @@ function getBinary() {
     xhr.open('GET', fname, true);
     xhr.responseType = 'arraybuffer';
     xhr.onload = function(e) {
+        //if conf.json indicates that data is int16, convert to Float32 after retrieval
         if (conf.dtype=='int16') {
             var scalars = new Int16Array(this.response);
             scalars = new Float32Array(scalars);
         } else {
-            var scalars = new Float32Array(this.response); 
+            var scalars = new Float32Array(this.response);
         }
+        //replace surfacecolor (i.e., intensity) data in traces objects
         var count = 0;
         for (i=0; i<traces[0].data.surfacecolor.length; i++) {
             for (j=0; j<traces[0].data.surfacecolor[0].length; j++) {
@@ -667,16 +694,20 @@ function getBinary() {
     xhr.send();
 }
 
+//obsolete, used if data not stored in binary
 function getArray() {
     for (i=0;i<traces.length;i++) {
         traces[i].data.surfacecolor = dataArray[guiVars.time][i]
     }
-    updateIntensity(); 
+    updateIntensity();
 }
 
+//new intensity data has been placed in surfacecolor. Process it and update GL objects directly for efficiency.
 function updateIntensity() {
     for (var m=0;m<traces.length;m++){
+        //upsample the intensity to fit the upsampled x,y,z coordinates
         intensity = getUpsampled(traces[m], traces[m].data.surfacecolor);
+        //change the intensity values in tverts (webGL-compatible representation of the entire surface object)
         var count = 6;
         for (i = 0; i < shape[0] - 1; ++i) {
             for (j = 0; j < shape[1] - 1; ++j) {
@@ -687,26 +718,33 @@ function updateIntensity() {
                     count=count+10;
                 }
             }
-        }  
+        }
+        //send tverts into the object webGL buffer
         traces[m].surface._coordinateBuffer.update(tverts[m].subarray(0, tptr));
     }
+    //force a gl-level redraw
     traces[0].scene.glplot.redraw();
     busy = false;
+    //if we've been ignoring other selectData calls, call selectData again to get up-to-date
     if (delayUpdate==true) {
         delayUpdate=false;
         selectData;
-    }   
+    }
 }
 
+//respond to new intensity data request
 function selectData() {
+    //if still busy with previous request, hold off
     if (busy==true) {
         delayUpdate=true;
         return
-    } 
+    }
     busy = true;
     if (dataArray) {
+      //if intensity data in browser memory
         getArray();
     } else if (binarypath) {
+      //if intensity data in remote binary files
         getBinary();
     }
 }
